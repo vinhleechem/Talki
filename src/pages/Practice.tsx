@@ -3,11 +3,15 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Play, RotateCcw, Volume2, Mic, Star } from "lucide-react";
 import Navbar from "@/components/Navbar";
+import { useToast } from "@/components/ui/use-toast";
+import { useProgress } from "@/hooks/useProgress";
 
 const Practice = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { toast } = useToast();
   const { scene, stage } = location.state || {};
+  const { updateProgress } = useProgress();
 
   const [isRecording, setIsRecording] = useState(false);
   const [hasCompleted, setHasCompleted] = useState(false);
@@ -38,6 +42,20 @@ const Practice = () => {
   const handleRetry = () => {
     setHasCompleted(false);
     setIsRecording(false);
+  };
+
+  const handleComplete = async () => {
+    // Random score between 3-5 stars for demo
+    const stars = Math.floor(Math.random() * 3) + 3;
+    
+    await updateProgress(stage.id, scene.id, true, stars);
+    
+    toast({
+      title: "Scene Completed! 🎉",
+      description: `You earned ${stars} stars!`,
+    });
+    
+    navigate("/roadmap");
   };
 
   return (
@@ -170,7 +188,7 @@ const Practice = () => {
                 <RotateCcw className="w-4 h-4 mr-2" />
                 Thử lại
               </Button>
-              <Button variant="secondary" onClick={() => navigate("/roadmap")} className="flex-1">
+              <Button variant="secondary" onClick={handleComplete} className="flex-1">
                 Tiếp tục
               </Button>
             </div>

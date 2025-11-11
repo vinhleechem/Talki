@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Lock, Check, Star } from "lucide-react";
+import { Lock, Check, Star, Skull } from "lucide-react";
 import Navbar from "@/components/Navbar";
+import { useProgress } from "@/hooks/useProgress";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Stage {
   id: number;
@@ -22,7 +24,61 @@ interface Scene {
 
 const RoadMap = () => {
   const navigate = useNavigate();
-  const userName = localStorage.getItem("userName") || "bạn";
+  const [userName, setUserName] = useState("bạn");
+  const { progress, loading, isBossUnlocked, checkBossPassed } = useProgress();
+  const [bossStatus, setBossStatus] = useState<Record<number, boolean>>({});
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.user_metadata?.name) {
+        setUserName(user.user_metadata.name);
+        localStorage.setItem("userName", user.user_metadata.name);
+      }
+    };
+    fetchUserData();
+  }, []);
+
+  useEffect(() => {
+    const checkAllBosses = async () => {
+      const statuses: Record<number, boolean> = {};
+      for (const stage of stages) {
+        statuses[stage.id] = await checkBossPassed(stage.id);
+      }
+      setBossStatus(statuses);
+    };
+    
+    if (!loading) {
+      checkAllBosses();
+    }
+  }, [loading, progress]);
+
+  const getSceneProgress = (stageId: number, sceneId: number) => {
+    const sceneProgress = progress.find(
+      p => p.stage_id === stageId && p.scene_id === sceneId
+    );
+    return {
+      completed: sceneProgress?.completed || false,
+      stars: sceneProgress?.stars || 0,
+    };
+  };
+
+  const isSceneUnlocked = (stageId: number, sceneId: number): boolean => {
+    // First scene of first stage is always unlocked
+    if (stageId === 1 && sceneId === 1) return true;
+    
+    // Check if previous stage boss was defeated
+    if (sceneId === 1 && stageId > 1) {
+      return bossStatus[stageId - 1] === true;
+    }
+    
+    // Check if previous scene in same stage is completed
+    const prevSceneProgress = progress.find(
+      p => p.stage_id === stageId && p.scene_id === sceneId - 1 && p.completed
+    );
+    
+    return !!prevSceneProgress;
+  };
 
   const [stages] = useState<Stage[]>([
     {
@@ -64,9 +120,30 @@ const RoadMap = () => {
   ]);
 
   const handleSceneClick = (scene: Scene, stage: Stage) => {
-    if (!scene.unlocked) return;
+    const unlocked = isSceneUnlocked(stage.id, scene.id);
+    if (!unlocked) return;
     navigate("/practice", { state: { scene, stage } });
   };
+
+  const handleBossClick = (stageId: number) => {
+    const stage = stages.find(s => s.id === stageId);
+    if (!stage) return;
+    
+    const totalScenes = stage.scenes.length;
+    if (!isBossUnlocked(stageId, totalScenes)) {
+      return;
+    }
+    
+    navigate("/boss", { state: { stageId } });
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-2xl font-black">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen pb-20">
@@ -112,41 +189,73 @@ const RoadMap = () => {
 
               {/* Scenes Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pl-0 sm:pl-20">
-                {stage.scenes.map((scene) => (
+                {stage.scenes.map((scene) => {
+                  const sceneProgress = getSceneProgress(stage.id, scene.id);
+                  const unlocked = isSceneUnlocked(stage.id, scene.id);
+                  
+                  return (
+                    <button
+                      key={scene.id}
+                      onClick={() => handleSceneClick(scene, stage)}
+                      disabled={!unlocked}
+                      className={`p-4 rounded-sm neo-border text-left transition-all ${
+                        unlocked
+                          ? "bg-card hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none neo-shadow cursor-pointer"
+                          : "bg-muted cursor-not-allowed opacity-60"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <h3 className="font-bold text-foreground">{scene.title}</h3>
+                        {!unlocked && <Lock className="w-4 h-4 text-muted-foreground" />}
+                        {sceneProgress.completed && <Check className="w-4 h-4 text-secondary" />}
+                      </div>
+
+                      {/* Stars */}
+                      {sceneProgress.completed && (
+                        <div className="flex items-center gap-1">
+                          {[...Array(5)].map((_, i) => (
+                            <Star
+                              key={i}
+                              className={`w-4 h-4 ${
+                                i < sceneProgress.stars
+                                  ? "text-primary fill-primary"
+                                  : "text-muted-foreground"
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Boss Button */}
+              {isBossUnlocked(stage.id, stage.scenes.length) && (
+                <div className="mt-6 pl-0 sm:pl-20">
                   <button
-                    key={scene.id}
-                    onClick={() => handleSceneClick(scene, stage)}
-                    disabled={!scene.unlocked}
-                    className={`p-4 rounded-sm neo-border text-left transition-all ${
-                      scene.unlocked
-                        ? "bg-card hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none neo-shadow cursor-pointer"
-                        : "bg-muted cursor-not-allowed opacity-60"
+                    onClick={() => handleBossClick(stage.id)}
+                    className={`w-full p-6 rounded-sm neo-border transition-all ${
+                      bossStatus[stage.id]
+                        ? "bg-secondary text-secondary-foreground neo-shadow"
+                        : "bg-primary text-primary-foreground hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none neo-shadow cursor-pointer"
                     }`}
                   >
-                    <div className="flex items-start justify-between mb-2">
-                      <h3 className="font-bold text-foreground">{scene.title}</h3>
-                      {!scene.unlocked && <Lock className="w-4 h-4 text-muted-foreground" />}
-                      {scene.completed && <Check className="w-4 h-4 text-secondary" />}
+                    <div className="flex items-center justify-center gap-3">
+                      <Skull className="w-6 h-6" />
+                      <h3 className="font-black text-xl">
+                        {bossStatus[stage.id] ? "Boss Defeated! ✓" : "Challenge Boss"}
+                      </h3>
+                      <Skull className="w-6 h-6" />
                     </div>
-
-                    {/* Stars */}
-                    {scene.completed && (
-                      <div className="flex items-center gap-1">
-                        {[...Array(5)].map((_, i) => (
-                          <Star
-                            key={i}
-                            className={`w-4 h-4 ${
-                              i < scene.stars
-                                ? "text-primary fill-primary"
-                                : "text-muted-foreground"
-                            }`}
-                          />
-                        ))}
-                      </div>
+                    {!bossStatus[stage.id] && (
+                      <p className="text-sm font-medium text-center mt-2 opacity-90">
+                        Test your skills in a real scenario
+                      </p>
                     )}
                   </button>
-                ))}
-              </div>
+                </div>
+              )}
 
               {/* Connector Line */}
               {stageIndex < stages.length - 1 && (
@@ -158,12 +267,6 @@ const RoadMap = () => {
           ))}
         </div>
 
-        {/* CTA */}
-        <div className="text-center mt-12">
-          <Button variant="hero" size="lg" onClick={() => navigate("/boss")}>
-            Thách đấu Trùm cuối 💀
-          </Button>
-        </div>
       </div>
     </div>
   );

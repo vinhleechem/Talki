@@ -1,24 +1,63 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { User, Mail, Calendar, LogOut, Edit2 } from "lucide-react";
 import Navbar from "@/components/Navbar";
+import { supabase } from "@/integrations/supabase/client";
+import { useProgress } from "@/hooks/useProgress";
+import { useToast } from "@/components/ui/use-toast";
 
 const Profile = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const { progress } = useProgress();
   const [isEditing, setIsEditing] = useState(false);
-  const [userName, setUserName] = useState(localStorage.getItem("userName") || "");
+  const [userName, setUserName] = useState("");
+  const [email, setEmail] = useState("");
 
-  const handleSave = () => {
-    localStorage.setItem("userName", userName);
-    setIsEditing(false);
+  useEffect(() => {
+    const fetchUserData = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUserName(user.user_metadata?.name || "User");
+        setEmail(user.email || "");
+      }
+    };
+    fetchUserData();
+  }, []);
+
+  const handleSave = async () => {
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data: { name: userName }
+      });
+
+      if (error) throw error;
+
+      localStorage.setItem("userName", userName);
+      setIsEditing(false);
+      
+      toast({
+        title: "Profile updated!",
+        description: "Your name has been saved.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     localStorage.removeItem("userName");
     navigate("/");
   };
+
+  const completedScenes = progress.filter(p => p.completed).length;
 
   return (
     <div className="min-h-screen pb-20">
@@ -75,7 +114,7 @@ const Profile = () => {
                 <Mail className="w-5 h-5 text-muted-foreground" />
                 <div>
                   <p className="text-xs font-bold text-muted-foreground">Email</p>
-                  <p className="font-bold text-foreground">user@talki.app</p>
+                  <p className="font-bold text-foreground">{email}</p>
                 </div>
               </div>
             </div>
@@ -107,12 +146,14 @@ const Profile = () => {
         {/* Stats */}
         <div className="grid grid-cols-2 gap-4 mb-6">
           <div className="bg-card neo-border neo-shadow rounded-sm p-6 text-center">
-            <div className="text-3xl font-black text-primary mb-1">7</div>
-            <div className="text-sm font-bold text-muted-foreground">Ngày streak</div>
+            <div className="text-3xl font-black text-primary mb-1">{completedScenes}</div>
+            <div className="text-sm font-bold text-muted-foreground">Scenes Completed</div>
           </div>
           <div className="bg-card neo-border neo-shadow rounded-sm p-6 text-center">
-            <div className="text-3xl font-black text-secondary mb-1">12</div>
-            <div className="text-sm font-bold text-muted-foreground">Cảnh hoàn thành</div>
+            <div className="text-3xl font-black text-secondary mb-1">
+              {progress.reduce((sum, p) => sum + (p.stars || 0), 0)}
+            </div>
+            <div className="text-sm font-bold text-muted-foreground">Total Stars</div>
           </div>
         </div>
 

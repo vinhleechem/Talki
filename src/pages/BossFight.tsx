@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Mic, User2, Smile, Meh, Frown, Laugh, Heart } from "lucide-react";
 import Navbar from "@/components/Navbar";
 
 const BossFight = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { stageId } = location.state || { stageId: 1 };
   const [selectedScenario, setSelectedScenario] = useState<string | null>(null);
   const [selectedGender, setSelectedGender] = useState<"male" | "female" | null>(null);
   const [selectedPersonality, setSelectedPersonality] = useState<string | null>(null);
@@ -41,7 +43,7 @@ const BossFight = () => {
         gender: selectedGender,
         personality: selectedPersonality,
         personalityName: selectedPersonalityData?.name,
-        stageId: 1 // This will be dynamic based on which stage's boss is being challenged
+        stageId: stageId
       } 
     });
   };
