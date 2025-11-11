@@ -30,11 +30,19 @@ const BossFight = () => {
 
   const handleStart = () => {
     if (!canStart) return;
-    // Navigate to actual boss fight
-    console.log({
-      scenario: selectedScenario,
-      gender: selectedGender,
-      personality: selectedPersonality,
+    
+    const selectedScenarioData = scenarios.find(s => s.id === selectedScenario);
+    const selectedPersonalityData = personalities.find(p => p.id === selectedPersonality);
+    
+    navigate('/boss-challenge', { 
+      state: { 
+        scenario: selectedScenario,
+        scenarioName: selectedScenarioData?.name,
+        gender: selectedGender,
+        personality: selectedPersonality,
+        personalityName: selectedPersonalityData?.name,
+        stageId: 1 // This will be dynamic based on which stage's boss is being challenged
+      } 
     });
   };
 

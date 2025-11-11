@@ -7,6 +7,7 @@ import Login from "./pages/Login";
 import RoadMap from "./pages/RoadMap";
 import Practice from "./pages/Practice";
 import BossFight from "./pages/BossFight";
+import BossChallengeWrapper from "./pages/BossChallengeWrapper";
 import Achievements from "./pages/Achievements";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
@@ -24,6 +25,7 @@ const App = () => (
           <Route path="/roadmap" element={<RoadMap />} />
           <Route path="/practice" element={<Practice />} />
           <Route path="/boss" element={<BossFight />} />
+          <Route path="/boss-challenge" element={<BossChallengeWrapper />} />
           <Route path="/achievements" element={<Achievements />} />
           <Route path="/profile" element={<Profile />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
