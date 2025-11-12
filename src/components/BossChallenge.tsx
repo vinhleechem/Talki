@@ -1,12 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Send, Trophy } from "lucide-react";
+import { ArrowLeft, Send, Trophy, Mic, MicOff, Volume2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { VoiceRecorder, VoiceSynthesis, VoiceRecognition } from "@/utils/voiceRecorder";
 
 interface Message {
   role: "user" | "assistant";
@@ -32,13 +33,36 @@ const BossChallenge = ({ scenario, scenarioName, gender, personality, personalit
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [finalScore, setFinalScore] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<string>("");
+  const [voiceMode, setVoiceMode] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
+  const voiceRecorderRef = useRef<VoiceRecorder | null>(null);
+  const voiceSynthesisRef = useRef<VoiceSynthesis | null>(null);
+  const voiceRecognitionRef = useRef<VoiceRecognition | null>(null);
 
   const maxExchanges = 7;
   const progress = (conversationCount / maxExchanges) * 100;
 
   useEffect(() => {
+    voiceSynthesisRef.current = new VoiceSynthesis();
+    try {
+      voiceRecognitionRef.current = new VoiceRecognition();
+    } catch (error) {
+      console.log('Voice recognition not supported in this browser');
+    }
+    
     // Start with AI's opening message
     sendInitialMessage();
+
+    return () => {
+      if (voiceSynthesisRef.current) {
+        voiceSynthesisRef.current.stop();
+      }
+      if (voiceRecorderRef.current?.isRecording()) {
+        voiceRecorderRef.current.stop();
+      }
+    };
   }, []);
 
   const sendInitialMessage = async () => {
@@ -57,6 +81,18 @@ const BossChallenge = ({ scenario, scenarioName, gender, personality, personalit
 
       const aiMessage = response.data.message;
       setMessages([{ role: 'assistant', content: aiMessage }]);
+      
+      // Speak the opening message if voice mode is enabled
+      if (voiceMode && voiceSynthesisRef.current) {
+        setIsSpeaking(true);
+        try {
+          await voiceSynthesisRef.current.speak(aiMessage, { lang: 'vi-VN' });
+        } catch (error) {
+          console.error('Error speaking:', error);
+        } finally {
+          setIsSpeaking(false);
+        }
+      }
     } catch (error) {
       console.error('Error:', error);
       toast({
@@ -118,6 +154,18 @@ const BossChallenge = ({ scenario, scenarioName, gender, personality, personalit
 
       setMessages([...newMessages, { role: 'assistant', content: aiMessage }]);
 
+      // Speak AI response if voice mode is enabled
+      if (voiceMode && voiceSynthesisRef.current && !isEvaluating) {
+        setIsSpeaking(true);
+        try {
+          await voiceSynthesisRef.current.speak(aiMessage, { lang: 'vi-VN' });
+        } catch (error) {
+          console.error('Error speaking:', error);
+        } finally {
+          setIsSpeaking(false);
+        }
+      }
+
     } catch (error) {
       console.error('Error:', error);
       toast({
@@ -127,6 +175,54 @@ const BossChallenge = ({ scenario, scenarioName, gender, personality, personalit
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleStartRecording = async () => {
+    if (!voiceRecognitionRef.current) {
+      toast({
+        title: "Voice not supported",
+        description: "Your browser doesn't support voice recognition",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setIsRecording(true);
+      voiceRecognitionRef.current.startListening(
+        (transcript) => {
+          setInput(transcript);
+          setIsRecording(false);
+        },
+        (error) => {
+          console.error('Voice recognition error:', error);
+          toast({
+            title: "Voice error",
+            description: "Failed to recognize speech. Please try again.",
+            variant: "destructive",
+          });
+          setIsRecording(false);
+        }
+      );
+    } catch (error) {
+      console.error('Error starting recording:', error);
+      setIsRecording(false);
+    }
+  };
+
+  const handleStopRecording = () => {
+    if (voiceRecognitionRef.current) {
+      voiceRecognitionRef.current.stopListening();
+      setIsRecording(false);
+    }
+  };
+
+  const toggleVoiceMode = () => {
+    setVoiceMode(!voiceMode);
+    if (voiceMode && voiceSynthesisRef.current) {
+      voiceSynthesisRef.current.stop();
+      setIsSpeaking(false);
     }
   };
 
@@ -216,6 +312,46 @@ const BossChallenge = ({ scenario, scenarioName, gender, personality, personalit
             <span className="text-sm font-bold">{conversationCount}/{maxExchanges}</span>
           </div>
           <Progress value={progress} className="h-2" />
+        </div>
+
+        {/* Voice Controls */}
+        <div className="flex items-center gap-2 mb-4">
+          <Button
+            variant={voiceMode ? "default" : "outline"}
+            size="sm"
+            onClick={toggleVoiceMode}
+            className="flex items-center gap-2"
+          >
+            <Volume2 className="w-4 h-4" />
+            {voiceMode ? "Chế độ giọng nói" : "Chế độ văn bản"}
+          </Button>
+
+          {voiceMode && (
+            <Button
+              variant={isRecording ? "destructive" : "secondary"}
+              size="sm"
+              onClick={isRecording ? handleStopRecording : handleStartRecording}
+              disabled={isSpeaking || loading}
+              className="flex items-center gap-2"
+            >
+              {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+              {isRecording ? "Dừng ghi âm" : "Ghi âm"}
+            </Button>
+          )}
+
+          {isSpeaking && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Volume2 className="w-4 h-4 animate-pulse" />
+              <span>Boss đang nói...</span>
+            </div>
+          )}
+
+          {isRecording && (
+            <div className="flex items-center gap-2 text-sm text-destructive">
+              <Mic className="w-4 h-4 animate-pulse" />
+              <span>Đang ghi âm...</span>
+            </div>
+          )}
         </div>
 
         {/* Chat Messages */}
