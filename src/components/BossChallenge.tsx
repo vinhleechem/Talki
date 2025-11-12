@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Send, Trophy, Mic, MicOff, Volume2 } from "lucide-react";
+import { ArrowLeft, Trophy, Mic, MicOff, Volume2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { VoiceRecorder, VoiceSynthesis, VoiceRecognition } from "@/utils/voiceRecorder";
@@ -33,7 +32,6 @@ const BossChallenge = ({ scenario, scenarioName, gender, personality, personalit
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [finalScore, setFinalScore] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<string>("");
-  const [voiceMode, setVoiceMode] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
 
@@ -82,8 +80,8 @@ const BossChallenge = ({ scenario, scenarioName, gender, personality, personalit
       const aiMessage = response.data.message;
       setMessages([{ role: 'assistant', content: aiMessage }]);
       
-      // Speak the opening message if voice mode is enabled
-      if (voiceMode && voiceSynthesisRef.current) {
+      // Auto-speak the opening message
+      if (voiceSynthesisRef.current) {
         setIsSpeaking(true);
         try {
           await voiceSynthesisRef.current.speak(aiMessage, { lang: 'vi-VN' });
@@ -154,8 +152,8 @@ const BossChallenge = ({ scenario, scenarioName, gender, personality, personalit
 
       setMessages([...newMessages, { role: 'assistant', content: aiMessage }]);
 
-      // Speak AI response if voice mode is enabled
-      if (voiceMode && voiceSynthesisRef.current && !isEvaluating) {
+      // Auto-speak AI response
+      if (voiceSynthesisRef.current && !isEvaluating) {
         setIsSpeaking(true);
         try {
           await voiceSynthesisRef.current.speak(aiMessage, { lang: 'vi-VN' });
@@ -218,13 +216,6 @@ const BossChallenge = ({ scenario, scenarioName, gender, personality, personalit
     }
   };
 
-  const toggleVoiceMode = () => {
-    setVoiceMode(!voiceMode);
-    if (voiceMode && voiceSynthesisRef.current) {
-      voiceSynthesisRef.current.stop();
-      setIsSpeaking(false);
-    }
-  };
 
   const saveBossChallenge = async (score: number, conversation: Message[], finalMessage: string) => {
     try {
@@ -317,27 +308,15 @@ const BossChallenge = ({ scenario, scenarioName, gender, personality, personalit
         {/* Voice Controls */}
         <div className="flex items-center gap-2 mb-4">
           <Button
-            variant={voiceMode ? "default" : "outline"}
-            size="sm"
-            onClick={toggleVoiceMode}
+            variant={isRecording ? "destructive" : "secondary"}
+            size="lg"
+            onClick={isRecording ? handleStopRecording : handleStartRecording}
+            disabled={isSpeaking || loading}
             className="flex items-center gap-2"
           >
-            <Volume2 className="w-4 h-4" />
-            {voiceMode ? "Chế độ giọng nói" : "Chế độ văn bản"}
+            {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+            {isRecording ? "Dừng ghi âm" : "Bắt đầu nói"}
           </Button>
-
-          {voiceMode && (
-            <Button
-              variant={isRecording ? "destructive" : "secondary"}
-              size="sm"
-              onClick={isRecording ? handleStopRecording : handleStartRecording}
-              disabled={isSpeaking || loading}
-              className="flex items-center gap-2"
-            >
-              {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-              {isRecording ? "Dừng ghi âm" : "Ghi âm"}
-            </Button>
-          )}
 
           {isSpeaking && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -376,26 +355,6 @@ const BossChallenge = ({ scenario, scenarioName, gender, personality, personalit
           )}
         </div>
 
-        {/* Input */}
-        <div className="fixed bottom-0 left-0 right-0 bg-background border-t neo-border p-4">
-          <div className="container mx-auto max-w-4xl flex gap-2">
-            <Input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-              placeholder="Type your response..."
-              disabled={loading || conversationCount >= maxExchanges}
-              className="flex-1"
-            />
-            <Button 
-              onClick={handleSend} 
-              disabled={loading || !input.trim() || conversationCount >= maxExchanges}
-              size="icon"
-            >
-              <Send className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
       </div>
     </div>
   );

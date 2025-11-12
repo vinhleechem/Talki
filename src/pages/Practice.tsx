@@ -52,10 +52,18 @@ const Practice = () => {
     
     toast({
       title: "Scene Completed! 🎉",
-      description: `You earned ${stars} stars!`,
+      description: `You earned ${stars} stars! Now face the AI Boss!`,
     });
     
-    navigate("/roadmap");
+    // Navigate to boss challenge with lesson info
+    navigate("/boss-challenge", { 
+      state: { 
+        stageId: stage.id,
+        sceneId: scene.id,
+        lessonTitle: scene.title,
+        stageTitle: stage.title
+      } 
+    });
   };
 
   return (
