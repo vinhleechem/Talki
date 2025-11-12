@@ -1,10 +1,10 @@
 import { NavLink } from "react-router-dom";
-import { Map, Skull, Trophy, User } from "lucide-react";
+import { Map, Castle, Trophy, User } from "lucide-react";
 
 const Navbar = () => {
   const navItems = [
     { path: "/roadmap", label: "Bản đồ", icon: Map },
-    { path: "/boss", label: "Trùm cuối", icon: Skull },
+    { path: "/dungeon", label: "Dungeon", icon: Castle },
     { path: "/achievements", label: "Thành tựu", icon: Trophy },
     { path: "/profile", label: "Hồ sơ", icon: User },
   ];

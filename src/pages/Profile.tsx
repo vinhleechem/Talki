@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { User, Mail, Calendar, LogOut, Edit2 } from "lucide-react";
+import { User, Mail, Calendar, LogOut, Edit2, Crown, Zap, Star } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { supabase } from "@/integrations/supabase/client";
 import { useProgress } from "@/hooks/useProgress";
@@ -154,6 +154,123 @@ const Profile = () => {
               {progress.reduce((sum, p) => sum + (p.stars || 0), 0)}
             </div>
             <div className="text-sm font-bold text-muted-foreground">Total Stars</div>
+          </div>
+        </div>
+
+        {/* Pricing Plans */}
+        <div className="bg-card neo-border neo-shadow rounded-sm p-8 mb-6">
+          <h2 className="text-2xl font-black text-foreground mb-2 flex items-center gap-2">
+            <Crown className="w-6 h-6 text-primary" />
+            Gói Học Tập
+          </h2>
+          <p className="text-sm text-muted-foreground mb-6">Nâng cấp để mở khóa tất cả các giai đoạn và tính năng cao cấp</p>
+
+          <div className="space-y-4">
+            {/* Free Plan */}
+            <div className="bg-muted neo-border rounded-sm p-6">
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h3 className="text-xl font-black text-foreground mb-1">Miễn Phí</h3>
+                  <p className="text-sm text-muted-foreground">Trải nghiệm cơ bản</p>
+                </div>
+                <div className="text-2xl font-black text-foreground">0đ</div>
+              </div>
+              <ul className="space-y-2 mb-4">
+                <li className="flex items-center gap-2 text-sm">
+                  <Star className="w-4 h-4 text-primary" />
+                  <span>Giai đoạn 1 đầy đủ</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm">
+                  <Star className="w-4 h-4 text-primary" />
+                  <span>Boss 1 (Giao tiếp cơ bản)</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm">
+                  <Star className="w-4 h-4 text-primary" />
+                  <span>Theo dõi tiến độ</span>
+                </li>
+              </ul>
+              <Button variant="outline" className="w-full" disabled>
+                Gói hiện tại
+              </Button>
+            </div>
+
+            {/* Monthly Plan */}
+            <div className="bg-primary/10 neo-border border-primary rounded-sm p-6 relative overflow-hidden">
+              <div className="absolute top-2 right-2 bg-primary text-primary-foreground text-xs font-black px-3 py-1 rounded-sm">
+                PHỔ BIẾN
+              </div>
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h3 className="text-xl font-black text-foreground mb-1">Gói Tháng</h3>
+                  <p className="text-sm text-muted-foreground">Mở khóa toàn bộ</p>
+                </div>
+                <div>
+                  <div className="text-2xl font-black text-foreground">99,000đ</div>
+                  <div className="text-xs text-muted-foreground text-right">/tháng</div>
+                </div>
+              </div>
+              <ul className="space-y-2 mb-4">
+                <li className="flex items-center gap-2 text-sm">
+                  <Zap className="w-4 h-4 text-primary" />
+                  <span className="font-bold">Tất cả các giai đoạn</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm">
+                  <Zap className="w-4 h-4 text-primary" />
+                  <span className="font-bold">Tất cả các Boss nâng cao</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm">
+                  <Zap className="w-4 h-4 text-primary" />
+                  <span className="font-bold">Bài học chuyên sâu</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm">
+                  <Zap className="w-4 h-4 text-primary" />
+                  <span className="font-bold">Hỗ trợ ưu tiên</span>
+                </li>
+              </ul>
+              <Button className="w-full bg-primary hover:bg-primary/90">
+                <Crown className="w-4 h-4 mr-2" />
+                Nâng cấp ngay
+              </Button>
+            </div>
+
+            {/* Annual Plan */}
+            <div className="bg-secondary/10 neo-border border-secondary rounded-sm p-6 relative">
+              <div className="absolute top-2 right-2 bg-secondary text-secondary-foreground text-xs font-black px-3 py-1 rounded-sm">
+                TIẾT KIỆM 17%
+              </div>
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h3 className="text-xl font-black text-foreground mb-1">Gói Năm</h3>
+                  <p className="text-sm text-muted-foreground">Tiết kiệm nhất</p>
+                </div>
+                <div>
+                  <div className="text-2xl font-black text-foreground">999,000đ</div>
+                  <div className="text-xs text-muted-foreground text-right">/năm</div>
+                </div>
+              </div>
+              <ul className="space-y-2 mb-4">
+                <li className="flex items-center gap-2 text-sm">
+                  <Zap className="w-4 h-4 text-secondary" />
+                  <span className="font-bold">Mọi tính năng gói Tháng</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm">
+                  <Zap className="w-4 h-4 text-secondary" />
+                  <span className="font-bold">Tiết kiệm 200,000đ/năm</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm">
+                  <Zap className="w-4 h-4 text-secondary" />
+                  <span className="font-bold">Nội dung độc quyền</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm">
+                  <Zap className="w-4 h-4 text-secondary" />
+                  <span className="font-bold">Cập nhật ưu tiên</span>
+                </li>
+              </ul>
+              <Button variant="secondary" className="w-full">
+                <Crown className="w-4 h-4 mr-2" />
+                Nâng cấp gói Năm
+              </Button>
+            </div>
           </div>
         </div>
 
