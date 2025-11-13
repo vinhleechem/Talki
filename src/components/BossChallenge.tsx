@@ -285,7 +285,7 @@ const BossChallenge = ({ scenario, scenarioName, gender, personality, personalit
       <div className="container mx-auto px-4 pt-24 max-w-4xl">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
-          <Button variant="outline" size="icon" onClick={() => navigate('/boss')}>
+          <Button variant="outline" size="icon" onClick={() => navigate('/roadmap')}>
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div className="flex-1">
