@@ -134,7 +134,13 @@ const RoadMap = () => {
       return;
     }
     
-    navigate("/boss", { state: { stageId } });
+    // Navigate directly to boss-challenge with stage info for random boss generation
+    navigate("/boss-challenge", { 
+      state: { 
+        stageId,
+        stageTitle: stage.title
+      } 
+    });
   };
 
   if (loading) {
