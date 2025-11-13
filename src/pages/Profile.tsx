@@ -227,7 +227,10 @@ const Profile = () => {
                   <span className="font-bold">Hỗ trợ ưu tiên</span>
                 </li>
               </ul>
-              <Button className="w-full bg-primary hover:bg-primary/90">
+              <Button 
+                className="w-full bg-primary hover:bg-primary/90"
+                onClick={() => navigate("/payment", { state: { plan: "monthly" } })}
+              >
                 <Crown className="w-4 h-4 mr-2" />
                 Nâng cấp ngay
               </Button>
@@ -266,7 +269,11 @@ const Profile = () => {
                   <span className="font-bold">Cập nhật ưu tiên</span>
                 </li>
               </ul>
-              <Button variant="secondary" className="w-full">
+              <Button 
+                variant="secondary" 
+                className="w-full"
+                onClick={() => navigate("/payment", { state: { plan: "annual" } })}
+              >
                 <Crown className="w-4 h-4 mr-2" />
                 Nâng cấp gói Năm
               </Button>

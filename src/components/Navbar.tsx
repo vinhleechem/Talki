@@ -4,7 +4,7 @@ import { Map, Castle, Trophy, User } from "lucide-react";
 const Navbar = () => {
   const navItems = [
     { path: "/roadmap", label: "Bản đồ", icon: Map },
-    { path: "/dungeon", label: "Dungeon", icon: Castle },
+    { path: "/pho-ban", label: "Phó Bản", icon: Castle },
     { path: "/achievements", label: "Thành tựu", icon: Trophy },
     { path: "/profile", label: "Hồ sơ", icon: User },
   ];
