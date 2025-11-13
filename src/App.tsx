@@ -11,7 +11,8 @@ import BossFight from "./pages/BossFight";
 import BossChallengeWrapper from "./pages/BossChallengeWrapper";
 import Achievements from "./pages/Achievements";
 import Profile from "./pages/Profile";
-import Dungeon from "./pages/Dungeon";
+import PhoBan from "./pages/PhoBan";
+import Payment from "./pages/Payment";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,9 +29,10 @@ const App = () => (
           <Route path="/practice" element={<ProtectedRoute><Practice /></ProtectedRoute>} />
           <Route path="/boss" element={<ProtectedRoute><BossFight /></ProtectedRoute>} />
           <Route path="/boss-challenge" element={<ProtectedRoute><BossChallengeWrapper /></ProtectedRoute>} />
-          <Route path="/dungeon" element={<ProtectedRoute><Dungeon /></ProtectedRoute>} />
+          <Route path="/pho-ban" element={<ProtectedRoute><PhoBan /></ProtectedRoute>} />
           <Route path="/achievements" element={<ProtectedRoute><Achievements /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+          <Route path="/payment" element={<ProtectedRoute><Payment /></ProtectedRoute>} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
