@@ -7,7 +7,6 @@ import Auth from "./pages/Auth";
 import RoadMap from "./pages/RoadMap";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Practice from "./pages/Practice";
-import BossFight from "./pages/BossFight";
 import BossChallengeWrapper from "./pages/BossChallengeWrapper";
 import Achievements from "./pages/Achievements";
 import Profile from "./pages/Profile";
@@ -27,7 +26,6 @@ const App = () => (
           <Route path="/" element={<Auth />} />
           <Route path="/roadmap" element={<ProtectedRoute><RoadMap /></ProtectedRoute>} />
           <Route path="/practice" element={<ProtectedRoute><Practice /></ProtectedRoute>} />
-          <Route path="/boss" element={<ProtectedRoute><BossFight /></ProtectedRoute>} />
           <Route path="/boss-challenge" element={<ProtectedRoute><BossChallengeWrapper /></ProtectedRoute>} />
           <Route path="/pho-ban" element={<ProtectedRoute><PhoBan /></ProtectedRoute>} />
           <Route path="/achievements" element={<ProtectedRoute><Achievements /></ProtectedRoute>} />
