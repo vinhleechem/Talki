@@ -1,0 +1,26 @@
+# .gitignore
+
+# 1. Bỏ qua môi trường ảo (Nặng, không cần up)
+venv/
+.venv/
+env/
+
+# 2. Bỏ qua file cấu hình nhạy cảm (CHỨA API KEY - TUYỆT ĐỐI KHÔNG UP)
+.env
+
+# 3. Bỏ qua file rác của Python (Sinh ra khi chạy code)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 4. Bỏ qua dữ liệu Database (Nếu lỡ lưu local)
+postgres_data/
+
+# 5. File hệ thống Mac/Windows
+.DS_Store
+Thumbs.db
+
+# 6. IDE (VS Code, Pycharm settings)
+.vscode/
+.idea/

@@ -1,0 +1,51 @@
+talki-backend/
+├── .env                    # (Đã có) Biến môi trường (Key AI, DB URL)
+├── .gitignore              # (Đã có) File bỏ qua git
+├── docker-compose.yml      # (Đã có) Cấu hình chạy DB
+├── requirements.txt        # (Đã có) Danh sách thư viện
+├── README.md               # (Đã có) Tài liệu dự án
+│
+├── app/                    # Source code chính (Tất cả code Python nằm trong này)
+│   ├── __init__.py
+│   ├── main.py             # Entry Point: Nơi khởi chạy server
+│   │
+│   ├── api/                # Lớp Giao tiếp (Controller): Chỉ nhận request và trả response
+│   │   ├── __init__.py
+│   │   └── v1/             # Quản lý version API (để sau này up v2 không đập v1)
+│   │       ├── __init__.py
+│   │       ├── api.py      # File gom tất cả router lại
+│   │       └── endpoints/  # Các API cụ thể
+│   │           ├── __init__.py
+│   │           ├── auth.py # API Login/Register
+│   │           ├── chat.py # API Chat với AI
+│   │           └── users.py # API quản lý user
+│   │
+│   ├── core/               # Lớp Cấu hình: Những thứ "bất di bất dịch"
+│   │   ├── __init__.py
+│   │   ├── config.py       # Load settings từ .env
+│   │   └── security.py     # Hàm băm mật khẩu, tạo Token JWT
+│   │
+│   ├── db/                 # Lớp Database: Kết nối CSDL
+│   │   ├── __init__.py
+│   │   ├── session.py      # Tạo kết nối (Engine)
+│   │   └── base.py         # Import tất cả Models để Alembic nhận diện
+│   │
+│   ├── models/             # Lớp Dữ liệu (ORM): Định nghĩa bảng trong Postgres
+│   │   ├── __init__.py
+│   │   ├── user.py         # Bảng User
+│   │   └── session.py      # Bảng Lịch sử chat (Session, Message)
+│   │   # (Sau này sẽ thêm vector_store.py cho RAG ở đây)
+│   │
+│   ├── schemas/            # Lớp Validate (Pydantic): Định nghĩa dữ liệu đầu vào/ra
+│   │   ├── __init__.py
+│   │   ├── user.py         # Kiểu dữ liệu User (LoginRequest, UserResponse...)
+│   │   ├── chat.py         # Kiểu dữ liệu Chat (MessageRequest, AudioResponse...)
+│   │   └── common.py       # Các kiểu dữ liệu chung
+│   │
+│   └── services/           # Lớp Nghiệp vụ (Logic chính): Nơi bộ não hoạt động
+│       ├── __init__.py
+│       ├── ai_service.py   # Code gọi Gemini, xử lý Prompt
+│       ├── audio_service.py # Code xử lý file âm thanh (nếu cần convert)
+│       └── rag_service.py  # Code tìm kiếm Vector (Sau này làm)
+│
+└── alembic.ini             # (Sẽ tạo sau) Cấu hình migration database

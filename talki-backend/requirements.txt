@@ -1,0 +1,7 @@
+fastapi             # Framework làm Backend (Nhanh, hiện đại)
+uvicorn             # Cái máy chủ để chạy code FastAPI
+sqlalchemy          # Thư viện để code Python nói chuyện với Database
+asyncpg             # Driver giúp kết nối Postgres siêu nhanh (bất đồng bộ)
+python-multipart    # Để nhận file âm thanh upload lên
+google-generativeai # Thư viện chính chủ để gọi Gemini
+python-dotenv       # Để đọc file cấu hình .env

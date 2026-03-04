@@ -1,0 +1,15 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16 # Dùng bản Postgres đã cài sẵn pgvector (để làm RAG sau này)
+    container_name: talki_db
+    environment:
+      - POSTGRES_USER=${DB_USER} # Tên đăng nhập DB
+      - POSTGRES_PASSWORD=${DB_PASSWORD} # Mật khẩu (đặt gì cũng được, nhớ lưu lại)
+      - POSTGRES_DB=${DB_NAME} # Tên Database
+    ports:
+      - "5432:5432" # Mở cổng 5432 để code Python chui vào được
+    volumes:
+      - postgres_data:/var/lib/postgresql/data # Lưu dữ liệu ra ngoài cái hộp, tắt Docker không bị mất data
+
+volumes:
+  postgres_data:
