@@ -2,6 +2,8 @@
 
 > **Version:** 2.1 | **Ngôn ngữ mục tiêu:** Tiếng Việt | **Cập nhật:** 09/03/2026
 
+> 📋 **Git workflow & quy tắc commit:** xem [CONTRIBUTING.md](CONTRIBUTING.md)
+
 ---
 
 ## Mục lục
