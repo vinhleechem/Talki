@@ -24,3 +24,6 @@ Thumbs.db
 # 6. IDE (VS Code, Pycharm settings)
 .vscode/
 .idea/
+
+# 7. VS Code Local History extension
+.history/

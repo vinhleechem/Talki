@@ -1,0 +1,6 @@
+# VS Code Local History extension
+.history/
+
+# OS
+.DS_Store
+Thumbs.db
