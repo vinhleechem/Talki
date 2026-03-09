@@ -349,16 +349,9 @@ Copy-Item .env.example .env   # điền DATABASE_URL, SUPABASE_*, GEMINI_API_KEY
 
 ### Database
 
-Chạy migration 1 lần bằng Supabase CLI:
+> **Chỉ cần chạy 1 lần duy nhất cho cả team** — database Supabase là cloud dùng chung, dev còn lại không cần chạy lại.
 
-```powershell
-cd frontend
-supabase login
-supabase link --project-ref <project-ref>
-supabase db push
-```
-
-Hoặc vào **Supabase Dashboard → SQL Editor** → paste nội dung file migration → Run.
+Vào **Supabase Dashboard → SQL Editor** → paste toàn bộ nội dung file `frontend/supabase/migrations/20260309000000_talki_v2_schema.sql` → **Run**.
 
 ---
 
