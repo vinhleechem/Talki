@@ -42,11 +42,14 @@ CREATE TABLE IF NOT EXISTS public.users (
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+DROP TRIGGER IF EXISTS trg_users_updated_at ON public.users;
 CREATE TRIGGER trg_users_updated_at
 BEFORE UPDATE ON public.users
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "user_select_own" ON public.users;
+DROP POLICY IF EXISTS "user_update_own" ON public.users;
 CREATE POLICY "user_select_own" ON public.users FOR SELECT USING (auth.uid() = id);
 CREATE POLICY "user_update_own" ON public.users FOR UPDATE USING (auth.uid() = id);
 
@@ -88,11 +91,14 @@ CREATE TABLE IF NOT EXISTS public.chapters (
   updated_at              TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+DROP TRIGGER IF EXISTS trg_chapters_updated_at ON public.chapters;
 CREATE TRIGGER trg_chapters_updated_at
 BEFORE UPDATE ON public.chapters
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 ALTER TABLE public.chapters ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "chapters_select_all" ON public.chapters;
+DROP POLICY IF EXISTS "chapters_modify_admin" ON public.chapters;
 CREATE POLICY "chapters_select_all"  ON public.chapters FOR SELECT USING (is_published = true OR (SELECT role FROM public.users WHERE id = auth.uid()) = 'admin');
 CREATE POLICY "chapters_modify_admin" ON public.chapters FOR ALL USING ((SELECT role FROM public.users WHERE id = auth.uid()) = 'admin');
 
@@ -113,11 +119,14 @@ CREATE TABLE IF NOT EXISTS public.lessons (
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+DROP TRIGGER IF EXISTS trg_lessons_updated_at ON public.lessons;
 CREATE TRIGGER trg_lessons_updated_at
 BEFORE UPDATE ON public.lessons
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 ALTER TABLE public.lessons ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "lessons_select_all" ON public.lessons;
+DROP POLICY IF EXISTS "lessons_modify_admin" ON public.lessons;
 CREATE POLICY "lessons_select_all"  ON public.lessons FOR SELECT USING (is_published = true OR (SELECT role FROM public.users WHERE id = auth.uid()) = 'admin');
 CREATE POLICY "lessons_modify_admin" ON public.lessons FOR ALL USING ((SELECT role FROM public.users WHERE id = auth.uid()) = 'admin');
 
@@ -127,6 +136,8 @@ CREATE TABLE IF NOT EXISTS public.bosses (
   chapter_id      UUID NOT NULL UNIQUE REFERENCES public.chapters(id) ON DELETE CASCADE,
   name            TEXT NOT NULL,       -- tên nhân vật, vd: "Trưởng phòng HR VinGroup"
   avatar_url      TEXT,
+  -- Nhiệm vụ hiển thị cho người chơi trước khi vào fight
+  mission_prompt  TEXT NOT NULL DEFAULT '', -- vd: "Bạn là ứng viên, hãy thuyết phục HR trong 5 lượt"
   -- System prompt định nghĩa persona + kịch bản cho AI
   persona_prompt  TEXT NOT NULL,
   gender          TEXT NOT NULL DEFAULT 'neutral' CHECK (gender IN ('male','female','neutral')),
@@ -138,11 +149,14 @@ CREATE TABLE IF NOT EXISTS public.bosses (
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+DROP TRIGGER IF EXISTS trg_bosses_updated_at ON public.bosses;
 CREATE TRIGGER trg_bosses_updated_at
 BEFORE UPDATE ON public.bosses
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 ALTER TABLE public.bosses ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "bosses_select_all" ON public.bosses;
+DROP POLICY IF EXISTS "bosses_modify_admin" ON public.bosses;
 CREATE POLICY "bosses_select_all"  ON public.bosses FOR SELECT USING (is_published = true OR (SELECT role FROM public.users WHERE id = auth.uid()) = 'admin');
 CREATE POLICY "bosses_modify_admin" ON public.bosses FOR ALL USING ((SELECT role FROM public.users WHERE id = auth.uid()) = 'admin');
 
@@ -173,11 +187,13 @@ CREATE TABLE IF NOT EXISTS public.user_lesson_progress (
   UNIQUE (user_id, lesson_id)
 );
 
+DROP TRIGGER IF EXISTS trg_user_lesson_progress_updated_at ON public.user_lesson_progress;
 CREATE TRIGGER trg_user_lesson_progress_updated_at
 BEFORE UPDATE ON public.user_lesson_progress
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 ALTER TABLE public.user_lesson_progress ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "ulp_all_own" ON public.user_lesson_progress;
 CREATE POLICY "ulp_all_own" ON public.user_lesson_progress FOR ALL USING (auth.uid() = user_id);
 
 
@@ -206,7 +222,47 @@ CREATE TABLE IF NOT EXISTS public.lesson_attempt_feedbacks (
 );
 
 ALTER TABLE public.lesson_attempt_feedbacks ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "laf_all_own" ON public.lesson_attempt_feedbacks;
 CREATE POLICY "laf_all_own" ON public.lesson_attempt_feedbacks FOR ALL USING (auth.uid() = user_id);
+
+
+-- =============================================================
+-- 3c. USER CHAPTER PROGRESS
+--     Cache tiến độ từng chương của user (dùng cho Roadmap)
+--     Cập nhật mỗi khi user hoàn thành lesson / boss fight
+-- =============================================================
+CREATE TABLE IF NOT EXISTS public.user_chapter_progress (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id             UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  chapter_id          UUID NOT NULL REFERENCES public.chapters(id) ON DELETE CASCADE,
+
+  -- Tiến độ lesson
+  lessons_completed   INTEGER NOT NULL DEFAULT 0,   -- số lesson đã completed (stars >= 3)
+  lessons_total       INTEGER NOT NULL DEFAULT 0,   -- tổng số lesson published trong chapter
+  completion_pct      INTEGER NOT NULL DEFAULT 0    -- 0-100
+    CHECK (completion_pct BETWEEN 0 AND 100),
+
+  -- Kết quả Boss Fight (lần tốt nhất)
+  boss_unlocked       BOOLEAN NOT NULL DEFAULT false,  -- true khi completion_pct >= boss_unlock_threshold
+  boss_stars          INTEGER                          -- sao tốt nhất đã đạt, NULL nếu chưa thử
+    CHECK (boss_stars IS NULL OR boss_stars BETWEEN 0 AND 5),
+  boss_passed         BOOLEAN NOT NULL DEFAULT false,  -- true khi boss_stars >= 3
+
+  -- Trạng thái chương
+  is_unlocked         BOOLEAN NOT NULL DEFAULT false,  -- false = bị khóa (chưa beat boss chapter trước)
+
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (user_id, chapter_id)
+);
+
+DROP TRIGGER IF EXISTS trg_user_chapter_progress_updated_at ON public.user_chapter_progress;
+CREATE TRIGGER trg_user_chapter_progress_updated_at
+BEFORE UPDATE ON public.user_chapter_progress
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+ALTER TABLE public.user_chapter_progress ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "ucp_all_own" ON public.user_chapter_progress;
+CREATE POLICY "ucp_all_own" ON public.user_chapter_progress FOR ALL USING (auth.uid() = user_id);
 
 
 -- =============================================================
@@ -229,6 +285,7 @@ CREATE TABLE IF NOT EXISTS public.conversations (
 );
 
 ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "conv_all_own" ON public.conversations;
 CREATE POLICY "conv_all_own" ON public.conversations FOR ALL USING (auth.uid() = user_id);
 
 -- Mỗi lượt hội thoại (turn-based, 10s countdown)
@@ -249,6 +306,7 @@ CREATE TABLE IF NOT EXISTS public.conversation_turns (
 );
 
 ALTER TABLE public.conversation_turns ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "ct_select_own" ON public.conversation_turns;
 CREATE POLICY "ct_select_own" ON public.conversation_turns
   FOR SELECT USING (
     auth.uid() = (SELECT user_id FROM public.conversations WHERE id = conversation_id)
@@ -271,6 +329,7 @@ CREATE TABLE IF NOT EXISTS public.conversation_feedbacks (
 );
 
 ALTER TABLE public.conversation_feedbacks ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "cf_select_own" ON public.conversation_feedbacks;
 CREATE POLICY "cf_select_own" ON public.conversation_feedbacks
   FOR SELECT USING (
     auth.uid() = (SELECT user_id FROM public.conversations WHERE id = conversation_id)
@@ -297,6 +356,7 @@ CREATE TABLE IF NOT EXISTS public.energy_logs (
 );
 
 ALTER TABLE public.energy_logs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "el_select_own" ON public.energy_logs;
 CREATE POLICY "el_select_own" ON public.energy_logs FOR SELECT USING (auth.uid() = user_id);
 
 
@@ -314,6 +374,7 @@ CREATE TABLE IF NOT EXISTS public.user_mistakes (
 );
 
 ALTER TABLE public.user_mistakes ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "um_all_own" ON public.user_mistakes;
 CREATE POLICY "um_all_own" ON public.user_mistakes FOR ALL USING (auth.uid() = user_id);
 
 
@@ -339,6 +400,8 @@ CREATE TABLE IF NOT EXISTS public.payment_orders (
 );
 
 ALTER TABLE public.payment_orders ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "po_select_own" ON public.payment_orders;
+DROP POLICY IF EXISTS "po_insert_own" ON public.payment_orders;
 CREATE POLICY "po_select_own" ON public.payment_orders FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "po_insert_own" ON public.payment_orders FOR INSERT WITH CHECK (auth.uid() = user_id);
 
@@ -359,6 +422,7 @@ CREATE TABLE IF NOT EXISTS public.subscriptions (
 );
 
 ALTER TABLE public.subscriptions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "sub_select_own" ON public.subscriptions;
 CREATE POLICY "sub_select_own" ON public.subscriptions FOR SELECT USING (auth.uid() = user_id);
 
 
@@ -376,3 +440,5 @@ CREATE INDEX IF NOT EXISTS idx_laf_user_lesson        ON public.lesson_attempt_f
 CREATE INDEX IF NOT EXISTS idx_payment_orders_user    ON public.payment_orders (user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_payment_orders_payos   ON public.payment_orders (payos_order_id);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_user     ON public.subscriptions (user_id, expires_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ucp_user               ON public.user_chapter_progress (user_id);
+CREATE INDEX IF NOT EXISTS idx_ucp_chapter            ON public.user_chapter_progress (chapter_id);
