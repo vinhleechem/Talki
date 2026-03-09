@@ -1,0 +1,27 @@
+services:
+  backend:
+    build: ./talki-backend
+    container_name: talki_backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./talki-backend/.env # Đọc biến môi trường từ file .env của backend
+    volumes:
+      - ./talki-backend:/app # Mount code → hot-reload hoạt động
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: talki_frontend
+    ports:
+      - "5173:5173"
+    env_file:
+      - ./frontend/.env # Đọc VITE_* env vars
+    volumes:
+      - ./frontend:/app # Mount code → hot-reload hoạt động
+      - /app/node_modules # Giữ nguyên node_modules trong container (không bị host override)
+    depends_on:
+      - backend
+    restart: unless-stopped
