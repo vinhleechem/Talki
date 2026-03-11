@@ -1,0 +1,15 @@
+FROM oven/bun:1
+
+WORKDIR /app
+
+# Cài deps (tận dụng cache)
+COPY package.json bun.lockb ./
+RUN bun install
+
+# Copy source (sẽ bị override bởi volume mount khi dev)
+COPY . .
+
+EXPOSE 5173
+
+# vite.config.ts đã có host: "::" → tự expose ra ngoài container
+CMD ["bun", "run", "dev"]
