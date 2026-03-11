@@ -12,6 +12,7 @@ from app.models.conversation import (
     ConversationStatus,
     UserMistake,
 )
+from app.models.user import User
 from app.models.lesson import Boss
 from app.schemas.conversation import (
     FeedbackResponse,
@@ -137,6 +138,9 @@ async def get_feedback(
     if cached:
         import json
         advice = json.loads(cached.advice_json or "[]")
+        mistakes_json = json.loads(getattr(cached, 'extracted_mistakes_json', "[]"))
+        # We don't return the full mistake list in feedback response currently, 
+        # but could if we want. It's stored in UserMistake table.
         return FeedbackResponse(
             conversation_id=conversation_id,
             fluency_score=cached.fluency_score,
@@ -145,6 +149,7 @@ async def get_feedback(
             total_filler_words=cached.total_filler_words,
             summary_text=cached.summary_text or "",
             advice_per_turn=[TurnFeedback(**a) for a in advice],
+            extracted_mistakes=mistakes_json,
         )
 
     boss = await db.get(Boss, convo.boss_id)
@@ -171,6 +176,44 @@ async def get_feedback(
         advice_json=json.dumps(raw.get("advice_per_turn", []), ensure_ascii=False),
     )
     db.add(fb)
+    
+    # Process mistakes
+    extracted_mistakes = raw.get("extracted_mistakes", [])
+    for mistake in extracted_mistakes:
+        word = mistake.get("word_or_phrase")
+        m_type = mistake.get("type")
+        correction = mistake.get("correction")
+        
+        if not word:
+            continue
+            
+        # Check if exists
+        existing_mistake_query = await db.execute(
+            select(UserMistake).where(
+                UserMistake.user_id == user_id,
+                UserMistake.word_or_phrase == word
+            )
+        )
+        existing_mistake = existing_mistake_query.scalar_one_or_none()
+        
+        if existing_mistake:
+            existing_mistake.occurrence_count += 1
+            existing_mistake.last_seen_at = datetime.now(timezone.utc)
+            if m_type:
+                existing_mistake.mistake_type = m_type
+            if correction:
+                existing_mistake.correction = correction
+        else:
+            new_mistake = UserMistake(
+                user_id=user_id,
+                word_or_phrase=word,
+                mistake_type=m_type,
+                correction=correction,
+                occurrence_count=1
+            )
+            db.add(new_mistake)
+
+    await db.flush() # Ensure mistakes and feedback are saved
 
     return FeedbackResponse(
         conversation_id=conversation_id,
@@ -180,4 +223,5 @@ async def get_feedback(
         total_filler_words=fb.total_filler_words,
         summary_text=fb.summary_text or "",
         advice_per_turn=[TurnFeedback(**a) for a in raw.get("advice_per_turn", [])],
+        extracted_mistakes=extracted_mistakes,
     )
