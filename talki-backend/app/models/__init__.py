@@ -6,6 +6,7 @@ from app.models.conversation import (
     ConversationFeedback,
     UserMistake,
 )
+from app.models.payment import PaymentOrder, Subscription
 
 __all__ = [
     "User",
@@ -18,4 +19,6 @@ __all__ = [
     "ConversationTurn",
     "ConversationFeedback",
     "UserMistake",
+    "PaymentOrder",
+    "Subscription",
 ]
