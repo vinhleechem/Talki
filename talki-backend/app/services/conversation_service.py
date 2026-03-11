@@ -19,7 +19,7 @@ from app.schemas.conversation import (
     StartConversationResponse,
     TurnFeedback,
 )
-from app.services import ai_service, stt_service, tts_service
+from app.services import ai_service, stt_service, tts_service, achievement_service
 from app.utils.text_analysis import count_filler_words, total_filler_count
 
 
@@ -105,6 +105,8 @@ async def process_speak_turn(
     if is_last:
         convo.status = ConversationStatus.completed
         convo.ended_at = datetime.now(timezone.utc)
+        await db.flush()
+        await achievement_service.check_and_award_achievements(db, convo.user_id)
 
     return SpeakResponse(
         turn_index=turn_index,

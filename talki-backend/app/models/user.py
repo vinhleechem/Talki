@@ -5,12 +5,14 @@ from datetime import datetime
 from sqlalchemy import Boolean, DateTime, Integer, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
+from datetime import date
 
 from app.core.database import Base
 
 if TYPE_CHECKING:
     from app.models.payment import PaymentOrder, Subscription
+    from app.models.achievement import UserAchievement
 
 
 class User(Base):
@@ -45,6 +47,12 @@ class User(Base):
     plan: Mapped[str] = mapped_column(String, default="free") # 'free', 'monthly', 'yearly'
     plan_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Phase 2: System Progress Tracking
+    current_streak: Mapped[int] = mapped_column(Integer, default=0)
+    highest_streak: Mapped[int] = mapped_column(Integer, default=0)
+    total_points: Mapped[int] = mapped_column(Integer, default=0)
+    last_active_date: Mapped[date | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -55,3 +63,4 @@ class User(Base):
     # Relationships
     payment_orders: Mapped[list["PaymentOrder"]] = relationship(back_populates="user")
     subscriptions: Mapped[list["Subscription"]] = relationship(back_populates="user")
+    achievements: Mapped[List["UserAchievement"]] = relationship(back_populates="user", cascade="all, delete-orphan")
