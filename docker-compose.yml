@@ -8,6 +8,8 @@ services:
       - ./talki-backend/.env # Đọc biến môi trường từ file .env của backend
     volumes:
       - ./talki-backend:/app # Mount code → hot-reload hoạt động
+    environment:
+      - WATCHFILES_FORCE_POLLING=1
     restart: unless-stopped
 
   frontend:
