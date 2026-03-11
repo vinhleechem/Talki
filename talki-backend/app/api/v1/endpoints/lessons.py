@@ -21,6 +21,7 @@ from app.schemas.lesson import (
     LevelOut,
     MarkLessonCompleteRequest,
 )
+from app.services import achievement_service
 
 router = APIRouter(prefix="/lessons", tags=["lessons"])
 
@@ -157,3 +158,5 @@ async def mark_lesson_complete(
             watch_percent=body.watch_percent,
         )
         db.add(progress)
+        await db.flush()  # needed before calculating total scenes completed
+        await achievement_service.check_and_award_achievements(db, uid)
