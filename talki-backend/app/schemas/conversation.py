@@ -31,6 +31,12 @@ class TurnFeedback(BaseModel):
     advice: str
 
 
+class MistakeDetail(BaseModel):
+    word_or_phrase: str
+    type: str  # e.g., 'grammar', 'vocabulary', 'pronunciation', 'filler'
+    correction: str
+
+
 class FeedbackResponse(BaseModel):
     conversation_id: uuid.UUID
     fluency_score: float
@@ -39,6 +45,7 @@ class FeedbackResponse(BaseModel):
     total_filler_words: int
     summary_text: str
     advice_per_turn: list[TurnFeedback]
+    extracted_mistakes: list[MistakeDetail] = []
 
 
 class ConversationOut(BaseModel):

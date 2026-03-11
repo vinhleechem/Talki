@@ -95,8 +95,10 @@ async def generate_feedback(
         '  "content_score": <0-10>,\n'
         '  "total_filler_words": <số nguyên>,\n'
         '  "summary_text": "<nhận xét tổng quan>",\n'
-        '  "advice_per_turn": [{"turn_index": 0, "advice": "..."}]\n'
+        '  "advice_per_turn": [{"turn_index": 0, "advice": "..."}],\n'
+        '  "extracted_mistakes": [{"word_or_phrase": "...", "type": "...", "correction": "..."}]\n'
         "}\n"
+        "Trong đó 'type' của mistake phải là một trong các giá trị: 'grammar', 'vocabulary', 'pronunciation', 'filler'.\n"
         "Chỉ trả về JSON, không thêm markdown hay giải thích."
     )
     response = await client.aio.models.generate_content(
