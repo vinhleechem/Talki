@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     # Google Cloud (STT / TTS)
     GOOGLE_CLOUD_CREDENTIALS_JSON: str = ""  # path to service account JSON
 
+    # PayOS
+    PAYOS_CLIENT_ID: str = ""
+    PAYOS_API_KEY: str = ""
+    PAYOS_CHECKSUM_KEY: str = ""
+
     # Hearts system
     FREE_HEARTS_PER_DAY: int = 3
     HEART_REGEN_HOURS: int = 8  # 1 heart every N hours
