@@ -11,11 +11,14 @@ from app.models.lesson import (
     Boss,
     Chapter,
     Lesson,
+    LessonAttemptFeedback,
     UserLessonProgress,
 )
 from app.schemas.lesson import (
     BossOut,
     ChapterOut,
+    LessonAttemptFeedbackCreate,
+    LessonAttemptFeedbackOut,
     LessonOut,
     MarkLessonCompleteRequest,
 )
@@ -130,3 +133,77 @@ async def mark_lesson_complete(
         db.add(progress)
         await db.flush()
         await achievement_service.check_and_award_achievements(db, uid)
+
+
+@router.post("/lessons/{lesson_id}/feedback", response_model=LessonAttemptFeedbackOut, status_code=201)
+async def submit_lesson_feedback(
+    lesson_id: uuid.UUID,
+    body: LessonAttemptFeedbackCreate,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Save AI-scored feedback for a lesson action attempt."""
+    uid = uuid.UUID(user_id)
+
+    # Count previous attempts to set attempt_number
+    count_result = await db.execute(
+        select(func.count(LessonAttemptFeedback.id)).where(
+            LessonAttemptFeedback.user_id == uid,
+            LessonAttemptFeedback.lesson_id == lesson_id,
+        )
+    )
+    attempt_number = (count_result.scalar() or 0) + 1
+
+    feedback = LessonAttemptFeedback(
+        user_id=uid,
+        lesson_id=lesson_id,
+        attempt_number=attempt_number,
+        **body.model_dump(),
+    )
+    db.add(feedback)
+    await db.flush()
+    await db.refresh(feedback)
+    return LessonAttemptFeedbackOut(
+        id=feedback.id,
+        lesson_id=feedback.lesson_id,
+        attempt_number=feedback.attempt_number,
+        content_score=feedback.content_score,
+        speed_score=feedback.speed_score,
+        emotion_score=feedback.emotion_score,
+        overall_score=feedback.overall_score,
+        feedback_text=feedback.feedback_text,
+        created_at=feedback.created_at.isoformat(),
+    )
+
+
+@router.get("/lessons/{lesson_id}/feedback", response_model=list[LessonAttemptFeedbackOut])
+async def get_lesson_feedbacks(
+    lesson_id: uuid.UUID,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get all feedback attempts for a lesson by the current user."""
+    uid = uuid.UUID(user_id)
+    result = await db.execute(
+        select(LessonAttemptFeedback)
+        .where(
+            LessonAttemptFeedback.user_id == uid,
+            LessonAttemptFeedback.lesson_id == lesson_id,
+        )
+        .order_by(LessonAttemptFeedback.attempt_number)
+    )
+    feedbacks = result.scalars().all()
+    return [
+        LessonAttemptFeedbackOut(
+            id=f.id,
+            lesson_id=f.lesson_id,
+            attempt_number=f.attempt_number,
+            content_score=f.content_score,
+            speed_score=f.speed_score,
+            emotion_score=f.emotion_score,
+            overall_score=f.overall_score,
+            feedback_text=f.feedback_text,
+            created_at=f.created_at.isoformat(),
+        )
+        for f in feedbacks
+    ]

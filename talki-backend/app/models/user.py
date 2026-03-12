@@ -2,7 +2,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Integer, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import TYPE_CHECKING, List
@@ -67,3 +67,21 @@ class User(Base):
     payment_orders: Mapped[list["PaymentOrder"]] = relationship(back_populates="user")
     subscriptions: Mapped[list["Subscription"]] = relationship(back_populates="user")
     achievements: Mapped[List["UserAchievement"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    energy_logs: Mapped[list["EnergyLog"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+
+
+class EnergyLog(Base):
+    """Audit log for every energy change (consume, regen, admin top-up)."""
+
+    __tablename__ = "energy_logs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    delta: Mapped[int] = mapped_column(Integer, nullable=False)          # âm = tiêu, dương = nhận
+    reason: Mapped[str] = mapped_column(String(100), nullable=False)     # "boss_fight" | "lesson_action" | "regen" | "admin"
+    balance_after: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    user: Mapped["User"] = relationship(back_populates="energy_logs")

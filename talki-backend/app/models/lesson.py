@@ -2,7 +2,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -103,3 +103,24 @@ class UserLessonProgress(Base):
     audio_url: Mapped[str | None] = mapped_column(String, nullable=True)
     transcript: Mapped[str | None] = mapped_column(Text, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class LessonAttemptFeedback(Base):
+    """AI feedback for each lesson action attempt (content / speed / emotion)."""
+
+    __tablename__ = "lesson_attempt_feedbacks"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    lesson_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("lessons.id", ondelete="CASCADE"), index=True
+    )
+    attempt_number: Mapped[int] = mapped_column(Integer, default=1)
+    content_score: Mapped[float] = mapped_column(Float, default=0.0)   # 0-10
+    speed_score: Mapped[float] = mapped_column(Float, default=0.0)     # 0-10
+    emotion_score: Mapped[float] = mapped_column(Float, default=0.0)   # 0-10
+    overall_score: Mapped[float] = mapped_column(Float, default=0.0)   # 0-100
+    feedback_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

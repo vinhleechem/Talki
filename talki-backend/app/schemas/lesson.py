@@ -45,3 +45,25 @@ class ChapterOut(BaseModel):
 
 class MarkLessonCompleteRequest(BaseModel):
     watch_percent: int = 100
+
+
+class LessonAttemptFeedbackCreate(BaseModel):
+    content_score: float = 0.0
+    speed_score: float = 0.0
+    emotion_score: float = 0.0
+    overall_score: float = 0.0
+    feedback_text: str | None = None
+
+
+class LessonAttemptFeedbackOut(BaseModel):
+    id: uuid.UUID
+    lesson_id: uuid.UUID
+    attempt_number: int
+    content_score: float
+    speed_score: float
+    emotion_score: float
+    overall_score: float
+    feedback_text: str | None
+    created_at: str
+
+    model_config = {"from_attributes": True}

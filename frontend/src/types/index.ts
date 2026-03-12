@@ -174,3 +174,25 @@ export interface AdminConversation {
   started_at: string;
   ended_at: string | null;
 }
+
+// ─── Lesson Attempt Feedback ──────────────────────────────────────────────────
+
+export interface LessonAttemptFeedback {
+  id: string;
+  lesson_id: string;
+  attempt_number: number;
+  content_score: number;
+  speed_score: number;
+  emotion_score: number;
+  overall_score: number;
+  feedback_text: string | null;
+  created_at: string;
+}
+
+export interface LessonAttemptFeedbackCreate {
+  content_score: number;
+  speed_score: number;
+  emotion_score: number;
+  overall_score: number;
+  feedback_text?: string | null;
+}

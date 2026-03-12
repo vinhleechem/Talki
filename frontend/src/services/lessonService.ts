@@ -1,5 +1,5 @@
 import { apiFetch } from "./api";
-import type { Chapter } from "@/types";
+import type { Chapter, LessonAttemptFeedback, LessonAttemptFeedbackCreate } from "@/types";
 
 export const lessonService = {
   /** Fetch all chapters, lessons, and boss unlock status */
@@ -13,5 +13,18 @@ export const lessonService = {
       method: "POST",
       body: JSON.stringify({ watch_percent: watchPercent }),
     });
+  },
+
+  /** Submit AI feedback scores for a lesson action attempt */
+  submitFeedback(lessonId: string, data: LessonAttemptFeedbackCreate): Promise<LessonAttemptFeedback> {
+    return apiFetch<LessonAttemptFeedback>(`/lessons/lessons/${lessonId}/feedback`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  /** Get all previous feedback attempts for a lesson */
+  getFeedbacks(lessonId: string): Promise<LessonAttemptFeedback[]> {
+    return apiFetch<LessonAttemptFeedback[]>(`/lessons/lessons/${lessonId}/feedback`);
   },
 };
