@@ -138,7 +138,7 @@ const Index = () => {
         <div className="container mx-auto flex items-center justify-between gap-4 px-4 py-4">
           <div className="flex items-center gap-3">
             <div className="flex h-12 w-12 items-center justify-center rounded-sm bg-primary neo-border neo-shadow-sm">
-              <MessageCircle className="h-6 w-6 text-primary-foreground" />
+              <span className="text-2xl font-black text-primary-foreground">T</span>
             </div>
             <div>
               <p className="text-2xl font-black leading-none">Talki</p>
