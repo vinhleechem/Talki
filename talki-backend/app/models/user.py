@@ -21,9 +21,8 @@ class User(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    supabase_uid: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     display_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    email: Mapped[str] = mapped_column(String(255), nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # Hearts / energy system (v2.1 uses energy instead of hearts, matching schema `users.energy`)
@@ -41,6 +40,10 @@ class User(Base):
     @hearts.setter
     def hearts(self, value):
         self.energy = value
+
+    @property
+    def is_premium(self) -> bool:
+        return self.plan in ("monthly", "yearly")
 
     # Subscription & Role
     role: Mapped[str] = mapped_column(String, default="user") # 'user' or 'admin'

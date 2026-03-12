@@ -2,7 +2,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -31,6 +31,9 @@ class Conversation(Base):
     status: Mapped[ConversationStatus] = mapped_column(
         Enum(ConversationStatus), default=ConversationStatus.active
     )
+    final_score: Mapped[int | None] = mapped_column(Integer, nullable=True)   # 0-100
+    stars: Mapped[int | None] = mapped_column(Integer, nullable=True)         # 0-5
+    passed: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

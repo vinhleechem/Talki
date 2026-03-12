@@ -14,6 +14,8 @@ import Profile from "./pages/Profile";
 import PhoBan from "./pages/PhoBan";
 import Payment from "./pages/Payment";
 import NotFound from "./pages/NotFound";
+import Admin from "./pages/Admin";
+import AdminRoute from "./components/AdminRoute";
 
 const queryClient = new QueryClient();
 
@@ -80,6 +82,14 @@ const App = () => (
               <ProtectedRoute>
                 <Payment />
               </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <AdminRoute>
+                <Admin />
+              </AdminRoute>
             }
           />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

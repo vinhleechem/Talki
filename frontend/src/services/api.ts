@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 
-const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1";
+const API_BASE = import.meta.env.VITE_API_URL;
 
 async function getAuthHeader(): Promise<Record<string, string>> {
   const { data } = await supabase.auth.getSession();

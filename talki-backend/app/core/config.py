@@ -12,6 +12,7 @@ class Settings(BaseSettings):
 
     # Supabase (for auth & storage)
     SUPABASE_URL: str
+    SUPABASE_ANON_KEY: str = ""          # public anon key – used for user-facing auth
     SUPABASE_SERVICE_ROLE_KEY: str
     SUPABASE_JWT_SECRET: str
 

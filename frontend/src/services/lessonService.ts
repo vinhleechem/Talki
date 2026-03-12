@@ -1,10 +1,10 @@
 import { apiFetch } from "./api";
-import type { Level } from "@/types";
+import type { Chapter } from "@/types";
 
 export const lessonService = {
-  /** Fetch all levels with chapters, lessons, and boss unlock status */
-  getLevels(): Promise<Level[]> {
-    return apiFetch<Level[]>("/lessons/levels");
+  /** Fetch all chapters, lessons, and boss unlock status */
+  getChapters(): Promise<Chapter[]> {
+    return apiFetch<Chapter[]>("/lessons/chapters");
   },
 
   /** Mark a lesson as completed */

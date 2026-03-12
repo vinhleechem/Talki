@@ -53,20 +53,25 @@ const Index = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
     const checkAuth = async () => {
       const {
         data: { session },
       } = await supabase.auth.getSession();
-
-      if (session) {
-        navigate("");
-      }
+      setIsAuthenticated(!!session);
     };
-
     checkAuth();
-  }, [navigate]);
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsAuthenticated(!!session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -141,9 +146,15 @@ const Index = () => {
             </div>
           </div>
 
-          <Button variant="outline" size="lg" onClick={() => openAuthModal("login")}>
-            Đăng nhập
-          </Button>
+          {isAuthenticated ? (
+            <Button variant="outline" size="lg" onClick={() => navigate("/roadmap")}>
+              Vào học ngay
+            </Button>
+          ) : (
+            <Button variant="outline" size="lg" onClick={() => openAuthModal("login")}>
+              Đăng nhập
+            </Button>
+          )}
         </div>
       </section>
 
@@ -166,13 +177,22 @@ const Index = () => {
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-center lg:justify-start">
-              <Button variant="hero" size="lg" onClick={() => openAuthModal("register")}>
-                Trải nghiệm ngay
-                <ArrowRight className="h-5 w-5" />
-              </Button>
-              <Button asChild variant="outline" size="lg">
-                <a href="#features">Xem điểm nổi bật</a>
-              </Button>
+              {isAuthenticated ? (
+                <Button variant="hero" size="lg" onClick={() => navigate("/roadmap")}>
+                  Tiếp tục học tập
+                  <ArrowRight className="h-5 w-5" />
+                </Button>
+              ) : (
+                <>
+                  <Button variant="hero" size="lg" onClick={() => openAuthModal("register")}>
+                    Trải nghiệm ngay
+                    <ArrowRight className="h-5 w-5" />
+                  </Button>
+                  <Button asChild variant="outline" size="lg">
+                    <a href="#features">Xem điểm nổi bật</a>
+                  </Button>
+                </>
+              )}
             </div>
 
             <div className="grid gap-4 sm:grid-cols-3">
@@ -291,13 +311,22 @@ const Index = () => {
             </p>
 
             <div className="mt-8 flex flex-col justify-center gap-4 sm:flex-row">
-              <Button variant="hero" size="lg" onClick={() => openAuthModal("register")}>
-                Đăng ký ngay
-                <ArrowRight className="h-5 w-5" />
-              </Button>
-              <Button variant="outline" size="lg" onClick={() => openAuthModal("login")}>
-                Tôi đã có tài khoản
-              </Button>
+              {isAuthenticated ? (
+                <Button variant="hero" size="lg" onClick={() => navigate("/roadmap")}>
+                  Vào học ngay
+                  <ArrowRight className="h-5 w-5" />
+                </Button>
+              ) : (
+                <>
+                  <Button variant="hero" size="lg" onClick={() => openAuthModal("register")}>
+                    Đăng ký ngay
+                    <ArrowRight className="h-5 w-5" />
+                  </Button>
+                  <Button variant="outline" size="lg" onClick={() => openAuthModal("login")}>
+                    Tôi đã có tài khoản
+                  </Button>
+                </>
+              )}
             </div>
           </Card>
         </div>

@@ -1,6 +1,5 @@
 from app.schemas.user import UserPublic, UserUpdate
 from app.schemas.lesson import (
-    LevelOut,
     ChapterOut,
     LessonOut,
     BossOut,
@@ -17,7 +16,6 @@ from app.schemas.conversation import (
 __all__ = [
     "UserPublic",
     "UserUpdate",
-    "LevelOut",
     "ChapterOut",
     "LessonOut",
     "BossOut",
