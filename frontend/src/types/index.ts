@@ -177,6 +177,10 @@ export interface AdminConversation {
 
 // ─── Lesson Attempt Feedback ──────────────────────────────────────────────────
 
+export interface LessonCompleteResponse {
+  newly_unlocked_achievements: string[];
+}
+
 export interface LessonAttemptFeedback {
   id: string;
   lesson_id: string;

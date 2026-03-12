@@ -47,6 +47,10 @@ class MarkLessonCompleteRequest(BaseModel):
     watch_percent: int = 100
 
 
+class LessonCompleteResponse(BaseModel):
+    newly_unlocked_achievements: list[str] = []
+
+
 class LessonAttemptFeedbackCreate(BaseModel):
     content_score: float = 0.0
     speed_score: float = 0.0

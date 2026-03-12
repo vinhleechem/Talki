@@ -1,5 +1,5 @@
 import { apiFetch } from "./api";
-import type { Chapter, LessonAttemptFeedback, LessonAttemptFeedbackCreate } from "@/types";
+import type { Chapter, LessonAttemptFeedback, LessonAttemptFeedbackCreate, LessonCompleteResponse } from "@/types";
 
 export const lessonService = {
   /** Fetch all chapters, lessons, and boss unlock status */
@@ -7,9 +7,9 @@ export const lessonService = {
     return apiFetch<Chapter[]>("/lessons/chapters");
   },
 
-  /** Mark a lesson as completed */
-  completeLesson(lessonId: string, watchPercent = 100): Promise<void> {
-    return apiFetch(`/lessons/lessons/${lessonId}/complete`, {
+  /** Mark a lesson as completed. Returns any newly unlocked achievements. */
+  completeLesson(lessonId: string, watchPercent = 100): Promise<LessonCompleteResponse> {
+    return apiFetch<LessonCompleteResponse>(`/lessons/lessons/${lessonId}/complete`, {
       method: "POST",
       body: JSON.stringify({ watch_percent: watchPercent }),
     });

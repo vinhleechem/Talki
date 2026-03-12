@@ -97,13 +97,21 @@ const Practice = () => {
           </h2>
           <div className="space-y-3 text-foreground">
             <p className="font-medium">
-              ✨ <strong>Mục tiêu:</strong> Học cách chào hỏi tự nhiên và thân thiện
+              ✨ <strong>Mục tiêu:</strong> Luyện nói cho đúng tình huống thực tế trong bài học này.
             </p>
+            {scene.question && (
+              <p className="font-medium">
+                🎯 <strong>Câu hỏi luyện tập:</strong> {scene.question}
+              </p>
+            )}
+            {!scene.question && (
+              <p className="font-medium">
+                🎯 <strong>Câu hỏi luyện tập:</strong> Hãy tưởng tượng bạn đang ở trong tình huống của bài và nói như ngoài đời
+                thật.
+              </p>
+            )}
             <p className="font-medium">
-              💡 <strong>Gợi ý:</strong> Giọng điệu vui vẻ, nhìn vào mắt đối phương, mỉm cười nhẹ
-            </p>
-            <p className="font-medium">
-              🎯 <strong>Ví dụ:</strong> "Xin chào! Rất vui được gặp bạn!"
+              💡 <strong>Lưu ý:</strong> Nói rõ ràng, tốc độ vừa phải và giữ cảm xúc tự nhiên.
             </p>
           </div>
         </div>

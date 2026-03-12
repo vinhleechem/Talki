@@ -17,6 +17,7 @@ interface Stage {
 interface Scene {
   id: number;
   title: string;
+  question?: string;
   unlocked: boolean;
   completed: boolean;
   stars: number;
@@ -87,10 +88,38 @@ const RoadMap = () => {
       unlocked: true,
       completed: false,
       scenes: [
-        { id: 1, title: "Xin chào", unlocked: true, completed: true, stars: 5 },
-        { id: 2, title: "Cảm ơn & Xin lỗi", unlocked: true, completed: false, stars: 0 },
-        { id: 3, title: "Đồng ý & Từ chối", unlocked: true, completed: false, stars: 0 },
-        { id: 4, title: "Hỏi thăm", unlocked: true, completed: false, stars: 0 },
+        {
+          id: 1,
+          title: "Xin chào",
+          question: "Hãy chào một bạn mới trong lớp theo cách thân thiện và tự tin.",
+          unlocked: true,
+          completed: true,
+          stars: 5,
+        },
+        {
+          id: 2,
+          title: "Cảm ơn & Xin lỗi",
+          question: "Hãy nói lời cảm ơn và xin lỗi với người bạn vô tình làm phiền.",
+          unlocked: true,
+          completed: false,
+          stars: 0,
+        },
+        {
+          id: 3,
+          title: "Đồng ý & Từ chối",
+          question: "Một bạn rủ bạn tham gia hoạt động mà bạn không thích. Hãy từ chối nhưng vẫn giữ phép lịch sự.",
+          unlocked: true,
+          completed: false,
+          stars: 0,
+        },
+        {
+          id: 4,
+          title: "Hỏi thăm",
+          question: "Gặp lại một người bạn sau kỳ nghỉ, hãy bắt chuyện hỏi thăm một cách tự nhiên.",
+          unlocked: true,
+          completed: false,
+          stars: 0,
+        },
       ],
     },
     {
@@ -99,10 +128,38 @@ const RoadMap = () => {
       unlocked: false,
       completed: false,
       scenes: [
-        { id: 5, title: "Giơ tay phát biểu", unlocked: false, completed: false, stars: 0 },
-        { id: 6, title: "Hỏi - Trả lời GV", unlocked: false, completed: false, stars: 0 },
-        { id: 7, title: "Làm việc nhóm", unlocked: false, completed: false, stars: 0 },
-        { id: 8, title: "Phản hồi & tranh luận", unlocked: false, completed: false, stars: 0 },
+        {
+          id: 5,
+          title: "Giơ tay phát biểu",
+          question: "Trong giờ học, bạn muốn đặt câu hỏi với giáo viên. Hãy mở đầu câu hỏi một cách tự tin.",
+          unlocked: false,
+          completed: false,
+          stars: 0,
+        },
+        {
+          id: 6,
+          title: "Hỏi - Trả lời GV",
+          question: "Giáo viên gọi tên bạn trả lời. Hãy trả lời ngắn gọn, rõ ràng và lễ phép.",
+          unlocked: false,
+          completed: false,
+          stars: 0,
+        },
+        {
+          id: 7,
+          title: "Làm việc nhóm",
+          question: "Bạn chuẩn bị bắt đầu làm việc nhóm. Hãy giới thiệu ý kiến của mình với các bạn trong nhóm.",
+          unlocked: false,
+          completed: false,
+          stars: 0,
+        },
+        {
+          id: 8,
+          title: "Phản hồi & tranh luận",
+          question: "Một bạn nói ý kiến mà bạn chưa đồng ý. Hãy góp ý và tranh luận một cách tôn trọng.",
+          unlocked: false,
+          completed: false,
+          stars: 0,
+        },
       ],
     },
     {
@@ -111,10 +168,38 @@ const RoadMap = () => {
       unlocked: false,
       completed: false,
       scenes: [
-        { id: 9, title: "Chuẩn bị nội dung", unlocked: false, completed: false, stars: 0 },
-        { id: 10, title: "Diễn đạt tự tin", unlocked: false, completed: false, stars: 0 },
-        { id: 11, title: "Ứng biến khi bị hỏi", unlocked: false, completed: false, stars: 0 },
-        { id: 12, title: "Kết thúc ấn tượng", unlocked: false, completed: false, stars: 0 },
+        {
+          id: 9,
+          title: "Chuẩn bị nội dung",
+          question: "Hãy mở đầu bài thuyết trình về chủ đề yêu thích của bạn trong 2–3 câu.",
+          unlocked: false,
+          completed: false,
+          stars: 0,
+        },
+        {
+          id: 10,
+          title: "Diễn đạt tự tin",
+          question: "Bạn đang ở giữa bài thuyết trình. Hãy nói một đoạn thể hiện sự tự tin và kết nối với khán giả.",
+          unlocked: false,
+          completed: false,
+          stars: 0,
+        },
+        {
+          id: 11,
+          title: "Ứng biến khi bị hỏi",
+          question: "Sau phần trình bày, một người hỏi bạn một câu khó. Hãy trả lời bình tĩnh và chân thành.",
+          unlocked: false,
+          completed: false,
+          stars: 0,
+        },
+        {
+          id: 12,
+          title: "Kết thúc ấn tượng",
+          question: "Hãy đưa ra câu kết thúc thật ấn tượng để cảm ơn và chào khán giả.",
+          unlocked: false,
+          completed: false,
+          stars: 0,
+        },
       ],
     },
   ]);

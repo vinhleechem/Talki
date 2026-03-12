@@ -19,6 +19,7 @@ from app.schemas.lesson import (
     ChapterOut,
     LessonAttemptFeedbackCreate,
     LessonAttemptFeedbackOut,
+    LessonCompleteResponse,
     LessonOut,
     MarkLessonCompleteRequest,
 )
@@ -109,7 +110,7 @@ async def list_chapters(
     return out
 
 
-@router.post("/lessons/{lesson_id}/complete", status_code=204)
+@router.post("/lessons/{lesson_id}/complete", response_model=LessonCompleteResponse)
 async def mark_lesson_complete(
     lesson_id: uuid.UUID,
     body: MarkLessonCompleteRequest,
@@ -123,6 +124,7 @@ async def mark_lesson_complete(
             UserLessonProgress.lesson_id == lesson_id,
         )
     )
+    newly_unlocked: list[str] = []
     if existing.scalar_one_or_none() is None:
         progress = UserLessonProgress(
             user_id=uid,
@@ -132,7 +134,8 @@ async def mark_lesson_complete(
         )
         db.add(progress)
         await db.flush()
-        await achievement_service.check_and_award_achievements(db, uid)
+        newly_unlocked = await achievement_service.check_and_award_achievements(db, uid)
+    return LessonCompleteResponse(newly_unlocked_achievements=newly_unlocked)
 
 
 @router.post("/lessons/{lesson_id}/feedback", response_model=LessonAttemptFeedbackOut, status_code=201)

@@ -12,6 +12,14 @@ import {
   AdminAchievement,
 } from "@/services/adminService";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from "@/components/ui/use-toast";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -1585,167 +1593,164 @@ function BossPage() {
     const handleCancel = () => { setEditing(null); setCreating(null); };
     const handleDelete = () => { if (editing && confirm("Xoá boss này?")) { adminApi.deleteBoss(editing); setBosses(b => b.filter(x => x.id !== editing)); setEditing(null); } };
 
-    const cardStyle = { backgroundColor: "white", border: "3px solid black", boxShadow: "6px 6px 0px 0px black", padding: "32px" };
-    const labelStyle = "block text-[11px] font-black uppercase mb-2 text-[#0f172a] tracking-widest";
-    const inputStyle = "w-full px-4 py-3.5 font-bold focus:outline-none bg-white transition-shadow text-[15px]";
+    const labelStyle = "block text-[11px] font-black uppercase mb-1.5 text-[#0f172a] tracking-widest";
+    const inputStyle = "w-full px-3 py-2.5 font-bold focus:outline-none bg-white text-[14px] focus:ring-2 focus:ring-orange-400 transition-shadow";
 
     return (
-      <div className="flex flex-col gap-6 anim-fadeIn">
-          {/* Breadcrumb + Actions bar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6" style={{ borderBottom: "3px solid black" }}>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 anim-fadeIn">
+        <div className="bg-white w-full max-w-3xl flex flex-col anim-scaleIn" style={{ border: "3px solid black", boxShadow: "8px 8px 0px 0px black", maxHeight: "90vh" }}>
+
+          {/* Modal Header */}
+          <div className="flex items-center justify-between px-6 py-4 flex-shrink-0" style={{ backgroundColor: "#fdf6e3", borderBottom: "3px solid black" }}>
             <div>
-              <div className="flex items-center gap-2 text-[10px] font-black uppercase text-slate-500 tracking-widest mb-2">
-                <button className="cursor-pointer hover:text-black transition-colors" onClick={handleCancel}>Boss Fight</button>
-                <span className="material-symbols-outlined text-[14px]">chevron_right</span>
-                <span className="text-primary">{isCreating ? "Tạo Boss mới" : "Chỉnh sửa Boss"}</span>
+              <div className="flex items-center gap-2 text-[10px] font-black uppercase text-slate-500 tracking-widest mb-1">
+                <span style={{ color: PRIMARY }}>Boss Fight</span>
+                <span className="material-symbols-outlined text-[13px]">chevron_right</span>
+                <span>{isCreating ? "Tạo Boss mới" : "Chỉnh sửa Boss"}</span>
               </div>
-              <h3 className="text-2xl font-black uppercase tracking-tighter">Cài Đặt Boss Fight</h3>
-              <p className="font-bold text-slate-500 text-sm mt-1">Cấu hình nhân vật AI và thông số thử thách cho chế độ Boss Fight.</p>
+              <h3 className="text-xl font-black uppercase tracking-tighter">
+                {isCreating ? "Tạo Boss Fight mới" : "Cài Đặt Boss Fight"}
+              </h3>
             </div>
-            <div className="flex items-center gap-3 flex-shrink-0">
-              <button onClick={handleCancel} className="bg-white px-5 py-2.5 flex items-center gap-2 font-black uppercase tracking-widest text-xs transition-all hover:translate-y-[1px] shadow-[3px_3px_0px_0px_black] hover:shadow-[1px_1px_0px_0px_black]" style={{ border: "2px solid black" }}>
-                <span className="material-symbols-outlined text-[16px]">arrow_back</span> Quay lại
-              </button>
-              <button onClick={handleSave} className="bg-primary text-white px-5 py-2.5 flex items-center gap-2 font-black uppercase tracking-widest text-xs transition-all hover:translate-y-[1px] shadow-[3px_3px_0px_0px_black] hover:shadow-[1px_1px_0px_0px_black]" style={{ border: "2px solid black" }}>
-                <span className="material-symbols-outlined text-[16px]">save</span> {isCreating ? "Tạo Boss" : "Lưu thay đổi"}
-              </button>
-            </div>
+            <button onClick={handleCancel} className="material-symbols-outlined font-black text-slate-400 hover:text-red-500 transition-colors cursor-pointer" style={{ fontSize: "24px" }}>
+              close
+            </button>
           </div>
 
-          <div className="flex flex-col lg:flex-row gap-8">
-            {/* Left Column */}
-            <div className="flex-1 flex flex-col gap-10">
-               
-               {/* 1. Boss Persona */}
-              <div style={cardStyle}>
-                <div className="flex items-center gap-3 mb-8">
-                  <span className="material-symbols-outlined text-2xl font-black">face</span>
-                  <h3 className="text-2xl font-black uppercase tracking-tighter">Boss Persona</h3>
-                </div>
+          {/* Modal Body - scrollable */}
+          <div className="overflow-y-auto flex-1 p-6 space-y-5">
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                  <div>
-                    <label className={labelStyle}>Boss Name</label>
-                    <input className={inputStyle} style={{ border: "2px solid black" }} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Mr. Garrison" />
-                  </div>
-                  <div>
-                    <label className={labelStyle}>Role / Occupation</label>
-                    <input className={inputStyle} style={{ border: "2px solid black" }} value={form.mission_prompt} onChange={(e) => setForm({ ...form, mission_prompt: e.target.value })} placeholder="Strict Teacher" />
-                  </div>
-                </div>
+            {/* Name + Role */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={labelStyle}>Boss Name <span className="text-red-500">*</span></label>
+                <input className={inputStyle} style={{ border: "2px solid black" }} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Mr. Garrison" />
+              </div>
+              <div>
+                <label className={labelStyle}>Role / Occupation</label>
+                <input className={inputStyle} style={{ border: "2px solid black" }} value={form.mission_prompt} onChange={(e) => setForm({ ...form, mission_prompt: e.target.value })} placeholder="Strict Teacher" />
+              </div>
+            </div>
 
+            {/* Tone of Voice */}
+            <div>
+              <label className={labelStyle}>Tone of Voice</label>
+              <div className="flex gap-3">
+                {[{id: 'male', label: 'Aggressive', icon: 'mood_bad'}, {id: 'female', label: 'Polite', icon: 'sentiment_satisfied'}, {id: 'neutral', label: 'Professional', icon: 'sentiment_neutral'}].map(g => {
+                  const isActive = form.gender === g.id;
+                  return (
+                    <label key={g.id} className="flex-1 cursor-pointer">
+                      <input type="radio" name="boss_gender_modal" value={g.id} checked={isActive} onChange={(e) => setForm({...form, gender: e.target.value})} className="hidden" />
+                      <div className="flex flex-col items-center gap-1 p-3 transition-all" style={{ border: isActive ? `2px solid ${PRIMARY}` : "2px solid black", backgroundColor: isActive ? "#fff7ed" : "white" }}>
+                        <span className="material-symbols-outlined text-[22px]" style={{ color: isActive ? PRIMARY : "#64748b" }}>{g.icon}</span>
+                        <span className="font-bold text-[12px] text-center" style={{ color: isActive ? PRIMARY : "#0f172a" }}>{g.label}</span>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Persona Prompt */}
+            <div>
+              <label className={labelStyle}>Persona System Prompt</label>
+              <textarea className={inputStyle} rows={5} style={{ border: "2px solid black", resize: "none", lineHeight: "1.6" }}
+                value={form.persona_prompt}
+                onChange={(e) => setForm({...form, persona_prompt: e.target.value})}
+                placeholder="You are Mr. Garrison, a strict teacher with 30 years of experience who has no patience..." />
+              <p className="text-[10px] font-black uppercase text-slate-400 mt-1.5 tracking-widest">Pro Tip: Include specific catchphrases and logical constraints for the AI.</p>
+            </div>
+
+            {/* Avatar + URL */}
+            <div className="flex items-center gap-4">
+              <div className="w-20 h-20 flex-shrink-0 overflow-hidden flex items-center justify-center text-3xl font-black text-slate-300 bg-slate-100"
+                   style={{ border: "3px solid black", boxShadow: "3px 3px 0 black" }}>
+                {form.avatar_url
+                  ? <img src={form.avatar_url} className="w-full h-full object-cover" alt="avatar" />
+                  : <span className="material-symbols-outlined text-[40px] text-slate-300">face</span>}
+              </div>
+              <div className="flex-1">
+                <label className={labelStyle}>Boss Avatar URL</label>
+                <input className={inputStyle} style={{ border: "2px solid black" }}
+                  value={form.avatar_url}
+                  onChange={(e) => setForm({...form, avatar_url: e.target.value})}
+                  placeholder="https://... (512×512 PNG recommended)" />
+              </div>
+            </div>
+
+            {/* Challenge Logic */}
+            <div className="p-4 bg-slate-50" style={{ border: "2px solid black" }}>
+              <p className="text-[11px] font-black uppercase tracking-widest mb-4 flex items-center gap-2">
+                <span className="material-symbols-outlined text-[16px]">tune</span> Challenge Logic
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div>
-                  <label className={labelStyle}>Tone of Voice</label>
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    {[{id: 'male', label: 'Aggressive (Male)'}, {id: 'female', label: 'Polite (Female)'}, {id: 'neutral', label: 'Professional (Neutral)'}].map(g => {
-                      const isActive = form.gender === g.id;
+                  <div className="flex justify-between items-center mb-2">
+                    <label className={`${labelStyle} mb-0`}>Max Turns</label>
+                    <span className="text-2xl font-black" style={{ color: PRIMARY }}>{form.max_turns}</span>
+                  </div>
+                  <div className="h-3 bg-slate-800 w-full relative flex items-center" style={{ border: "2px solid black" }}>
+                    <input type="range" min="1" max="20" value={form.max_turns}
+                      onChange={e => setForm({...form, max_turns: +e.target.value})}
+                      className="absolute inset-0 w-full opacity-0 cursor-pointer z-10" />
+                    <div className="absolute h-5 w-5 transition-all" style={{ left: `calc(${(form.max_turns - 1) / 19 * 100}% - 10px)`, border: "2px solid black", backgroundColor: PRIMARY }} />
+                  </div>
+                </div>
+                <div>
+                  <label className={labelStyle}>Pass Score</label>
+                  <div className="flex items-center bg-white" style={{ border: "2px solid black" }}>
+                    {[20, 40, 60, 80, 100].map((score) => {
+                      const isActive = form.pass_score >= score;
                       return (
-                        <label key={g.id} className="flex-1 cursor-pointer group">
-                          <input type="radio" name="gender" value={g.id} checked={isActive} onChange={(e) => setForm({...form, gender: e.target.value})} className="hidden" />
-                          <div className="flex items-center gap-3 px-4 py-3.5 bg-white transition-all group-hover:bg-slate-50" style={{ border: isActive ? `2px solid ${PRIMARY}` : "2px solid black", color: isActive ? PRIMARY : "#0f172a" }}>
-                            <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0" style={{ border: isActive ? `2px solid ${PRIMARY}` : "2px solid black" }}>
-                              {isActive && <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: PRIMARY }}></div>}
-                            </div>
-                            <span className="font-bold text-[15px]">{g.label}</span>
-                          </div>
-                        </label>
-                      )
+                        <div key={score} className="flex-1 flex items-center justify-center py-2.5 cursor-pointer hover:bg-orange-50 transition-colors border-r-2 border-black last:border-r-0"
+                          onClick={() => setForm({...form, pass_score: score})}>
+                          <span className="material-symbols-outlined text-2xl" style={{ color: isActive ? PRIMARY : "#e2e8f0", fontVariationSettings: isActive ? "'FILL' 1" : "'FILL' 0" }}>star</span>
+                        </div>
+                      );
                     })}
                   </div>
+                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mt-1">{Math.max(1, Math.floor(form.pass_score / 20))}/5 sao để qua Boss</p>
                 </div>
               </div>
-
-              {/* 2. Persona System Prompt */}
-              <div style={cardStyle}>
-                <div className="flex items-center gap-3 mb-6">
-                  <span className="material-symbols-outlined text-2xl font-black">psychology</span>
-                  <h3 className="text-2xl font-black uppercase tracking-tighter">Persona System Prompt</h3>
-                </div>
-                <div>
-                  <label className={labelStyle}>Deep Instructions</label>
-                  <textarea className={inputStyle} rows={8} style={{ border: "2px solid black", resize: "none", lineHeight: "1.6" }} value={form.persona_prompt} onChange={(e) => setForm({...form, persona_prompt: e.target.value})} placeholder="You are Mr. Garrison, a teacher with 30 years of experience who has lost all patience..." />
-                  <p className="text-[10px] font-black uppercase text-slate-500 mt-3 tracking-widest">Pro Tip: Include specific catchphrases and logical constraints for the AI.</p>
-                </div>
-              </div>
-              
             </div>
 
-            {/* Right Column */}
-            <div className="w-full lg:w-[480px] flex flex-col gap-10">
-               
-               {/* 3. Boss Avatar */}
-              <div style={cardStyle} className="flex flex-col items-center">
-                <div className="flex items-center gap-3 self-start mb-6">
-                  <span className="material-symbols-outlined text-2xl font-black">account_box</span>
-                  <h3 className="text-2xl font-black uppercase tracking-tighter">Boss Avatar</h3>
-                </div>
-                
-                <div className="w-[70%] max-w-[240px] aspect-square mt-2 relative overflow-hidden bg-[#e2e8f0]" style={{ border: "3px solid black" }}>
-                  {form.avatar_url ? <img src={form.avatar_url} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center font-black text-6xl text-slate-400">?</div>}
-                </div>
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center mt-6 mb-4">RECOMMENDED: 512X512 PNG</p>
-                
-                <div className="w-full">
-                   <input className={`${inputStyle} text-center`} style={{ border: "2px solid black", padding: "12px" }} value={form.avatar_url} onChange={(e) => setForm({...form, avatar_url: e.target.value})} placeholder="Paste Image URL / Change Image..." />
-                </div>
+            {/* Published toggle */}
+            <div className="flex items-center justify-between p-4 bg-white cursor-pointer"
+              style={{ border: "2px solid black" }}
+              onClick={() => setForm({...form, is_published: !form.is_published})}>
+              <div>
+                <p className="text-[13px] font-black uppercase">{form.is_published ? "✅ Published (Học viên thấy được)" : "Draft (Ẩn với học viên)"}</p>
+                <p className="text-[11px] text-slate-500 font-bold mt-0.5">{form.is_published ? "Boss này đang hoạt động" : "Boss chưa được bật lên"}</p>
               </div>
-
-               {/* 4. Challenge Logic */}
-              <div style={cardStyle} className="pb-8">
-                <div className="flex items-center gap-3 mb-8">
-                  <span className="material-symbols-outlined text-2xl font-black">tune</span>
-                  <h3 className="text-2xl font-black uppercase tracking-tighter leading-none">Challenge<br/>Logic</h3>
-                </div>
-
-                <div className="mb-8 mt-2">
-                  <div className="flex justify-between items-center mb-3">
-                     <label className={`${labelStyle} mb-0`}>Max Turns</label>
-                     <span className="text-3xl font-black text-primary">{form.max_turns}</span>
-                  </div>
-                  <div className="h-4 bg-slate-900 w-full relative group flex items-center cursor-pointer" style={{ border: "2px solid black" }}>
-                     <input type="range" min="1" max="20" value={form.max_turns} onChange={e => setForm({...form, max_turns: +e.target.value})} className="absolute inset-0 w-full opacity-0 cursor-pointer z-10" />
-                     <div className="absolute h-6 bg-primary w-6 transition-all" style={{ left: `calc(${(form.max_turns - 1) / 19 * 100}% - 12px)`, border: "3px solid black" }}></div>
-                  </div>
-                </div>
-
-                <div className="mb-8 mt-4">
-                   <label className={labelStyle}>Pass Score Requirement</label>
-                   <div className="flex w-full items-center justify-center bg-white" style={{ border: "3px solid black" }}>
-                      {[20, 40, 60, 80, 100].map((score, i) => {
-                         const isActive = form.pass_score >= score;
-                         return (
-                         <div key={score} className="flex-1 border-r-[3px] border-black last:border-r-0 flex items-center justify-center py-4 cursor-pointer hover:bg-slate-50 transition-colors" onClick={() => setForm({...form, pass_score: score})}>
-                            <span className="material-symbols-outlined text-3xl transition-colors" style={{ color: isActive ? PRIMARY : "#e2e8f0", fontVariationSettings: isActive ? "'FILL' 1" : "'FILL' 0" }}>star</span>
-                         </div>
-                      )})}
-                   </div>
-                   <p className="text-[10px] font-black uppercase text-slate-800 tracking-widest text-center mt-4">STUDENTS NEED {Math.max(1, Math.floor(form.pass_score/20))}/5 STARS TO WIN</p>
-                </div>
-
-                <label className="flex items-center justify-between cursor-pointer pt-6 mt-4" style={{ borderTop: "3px solid black" }}>
-                   <span className="text-[14px] font-black uppercase text-[#0f172a]">Published (Active)</span>
-                   <div className="w-14 h-7 flex-shrink-0 flex items-center px-1 transition-colors cursor-pointer" style={{ border: "3px solid black", backgroundColor: form.is_published ? PRIMARY : "#e2e8f0" }}>
-                      <div className="w-4 h-4 bg-white transition-transform" style={{ border: "3px solid black", transform: form.is_published ? "translateX(28px)" : "translateX(0)" }} />
-                   </div>
-                </label>
+              <div className="w-12 h-6 flex-shrink-0 flex items-center px-0.5 transition-colors" style={{ border: "2px solid black", backgroundColor: form.is_published ? PRIMARY : "#e2e8f0" }}>
+                <div className="w-4 h-4 bg-white transition-transform" style={{ border: "2px solid black", transform: form.is_published ? "translateX(24px)" : "translateX(0)" }} />
               </div>
-
-               {/* Actions */}
-              {!isCreating && (
-                <div className="flex flex-col gap-4 mt-2">
-                  <button onClick={handleDelete} className="w-full flex items-center justify-center gap-3 py-5 bg-[#ef4444] hover:bg-[#dc2626] text-white font-black uppercase tracking-widest transition-transform active:translate-y-[2px] shadow-[4px_4px_0px_0px_black] hover:shadow-[2px_2px_0px_0px_black]" style={{ border: "3px solid black" }}>
-                    <span className="material-symbols-outlined font-black">delete_forever</span> Archive Boss
-                  </button>
-                  <button className="w-full flex items-center justify-center gap-3 py-5 bg-[#facc15] hover:bg-[#eab308] text-[#0f172a] font-black uppercase tracking-widest transition-transform active:translate-y-[2px] shadow-[4px_4px_0px_0px_black] hover:shadow-[2px_2px_0px_0px_black]" style={{ border: "3px solid black" }}>
-                    <span className="material-symbols-outlined font-black">content_copy</span> Duplicate Settings
-                  </button>
-                </div>
-              )}
             </div>
+
           </div>
+
+          {/* Modal Footer */}
+          <div className="flex items-center gap-3 px-6 py-4 flex-shrink-0" style={{ borderTop: "3px solid black", backgroundColor: "#fdf6e3" }}>
+            {!isCreating && (
+              <button onClick={handleDelete} className="flex items-center gap-1.5 font-black uppercase text-xs px-4 py-2.5 text-red-500 hover:bg-red-50 transition-colors mr-auto" style={{ border: "2px solid #ef4444" }}>
+                <span className="material-symbols-outlined text-[16px]">delete_forever</span> Xoá Boss
+              </button>
+            )}
+            <button onClick={handleCancel} className="font-black text-xs px-5 py-2.5 uppercase tracking-wider hover:bg-slate-100 transition-colors" style={{ border: "2px solid black" }}>
+              Huỷ
+            </button>
+            <button onClick={handleSave} disabled={!form.name.trim()} className="flex items-center justify-center gap-1.5 font-black text-xs px-6 py-2.5 text-white uppercase tracking-wider disabled:opacity-50 transition-all hover:brightness-110" style={{ backgroundColor: PRIMARY, border: "2px solid black", boxShadow: "2px 2px 0 black" }}>
+              <span className="material-symbols-outlined text-[16px]">save</span>
+              {isCreating ? "Tạo Boss" : "Lưu thay đổi"}
+            </button>
+          </div>
+
+        </div>
       </div>
     );
   }
+
+
 
   return (
     <div className="grid gap-4">
@@ -1860,6 +1865,7 @@ function AchievementsPage() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const editOpen = editing !== null;
   const blankForm = { name: "", description: "", icon_url: "", condition_type: "streak", condition_value: 7 };
   const [form, setForm] = useState(blankForm);
   const [createForm, setCreateForm] = useState({ code: "", ...blankForm });
@@ -2002,11 +2008,20 @@ function AchievementsPage() {
         </button>
       </div>
 
-      {creating && (
-        <div className="bg-white mb-4 overflow-hidden" style={neo.card}>
-          <div className="px-4 py-2" style={{ borderBottom: "2px solid black", backgroundColor: "#f8f4ec" }}>
-            <span className="text-xs font-black uppercase">Thành tựu mới</span>
-          </div>
+      <Dialog
+        open={creating}
+        onOpenChange={(open) => {
+          setCreating(open);
+          if (!open) setCreateForm({ code: "", ...blankForm });
+        }}
+      >
+        <DialogContent className="p-0 overflow-hidden" style={neo.card}>
+          <DialogHeader className="px-4 py-3" style={{ borderBottom: "2px solid black", backgroundColor: "#f8f4ec" }}>
+            <DialogTitle className="text-xs font-black uppercase tracking-wider italic">Thành tựu mới</DialogTitle>
+            <DialogDescription className="text-[11px] font-bold text-slate-500">
+              Tạo achievement mới (code phải unique).
+            </DialogDescription>
+          </DialogHeader>
           <AchievementForm
             f={createForm as Record<string, unknown>}
             setF={(v) => setCreateForm(v as typeof createForm)}
@@ -2014,8 +2029,8 @@ function AchievementsPage() {
             onSave={saveCreate}
             onCancel={() => setCreating(false)}
           />
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
       <div className="grid gap-3">
         {achievements.length === 0 && !creating && (
@@ -2069,17 +2084,33 @@ function AchievementsPage() {
                 </button>
               </div>
             </div>
-            {editing === a.id && (
-              <AchievementForm
-                f={form as Record<string, unknown>}
-                setF={(v) => setForm(v as typeof form)}
-                onSave={() => saveEdit(a.id)}
-                onCancel={() => setEditing(null)}
-              />
-            )}
           </div>
         ))}
       </div>
+
+      <Dialog
+        open={editOpen}
+        onOpenChange={(open) => {
+          if (!open) setEditing(null);
+        }}
+      >
+        <DialogContent className="p-0 overflow-hidden" style={neo.card}>
+          <DialogHeader className="px-4 py-3" style={{ borderBottom: "2px solid black", backgroundColor: "#f8f4ec" }}>
+            <DialogTitle className="text-xs font-black uppercase tracking-wider italic">Sửa thành tựu</DialogTitle>
+            <DialogDescription className="text-[11px] font-bold text-slate-500">
+              Cập nhật thông tin achievement.
+            </DialogDescription>
+          </DialogHeader>
+          {editing && (
+            <AchievementForm
+              f={form as Record<string, unknown>}
+              setF={(v) => setForm(v as typeof form)}
+              onSave={() => saveEdit(editing)}
+              onCancel={() => setEditing(null)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
