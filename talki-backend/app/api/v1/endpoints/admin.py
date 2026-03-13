@@ -17,7 +17,7 @@ from app.models.achievement import Achievement
 from app.models.conversation import Conversation, ConversationStatus
 from app.models.lesson import Boss, Chapter, Lesson
 from app.models.payment import PaymentOrder
-from app.models.user import User
+from app.models.user import EnergyLog, User
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -216,6 +216,22 @@ class AdminConversationOut(BaseModel):
     status: str
     started_at: datetime
     ended_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+
+class AdminEnergyLogOut(BaseModel):
+    id: uuid.UUID
+    user_id: uuid.UUID
+    user_name: str
+    delta: int
+    reason: str
+    energy_after: int
+    reference_id: Optional[uuid.UUID]
+    source_type: Optional[str]
+    source_name: Optional[str]
+    created_at: datetime
 
     class Config:
         from_attributes = True
@@ -663,4 +679,58 @@ async def list_conversations(
                 ended_at=conv.ended_at,
             )
         )
+    return out
+
+
+@router.get("/energy-logs", response_model=list[AdminEnergyLogOut])
+async def list_energy_logs(
+    skip: int = 0,
+    limit: int = 100,
+    _: str = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(EnergyLog).order_by(EnergyLog.created_at.desc()).offset(skip).limit(limit)
+    )
+    logs = result.scalars().all()
+
+    out: list[AdminEnergyLogOut] = []
+    for log in logs:
+        user = await db.get(User, log.user_id)
+
+        source_type: Optional[str] = None
+        source_name: Optional[str] = None
+        if log.reason == "lesson_action" and log.reference_id:
+            lesson = await db.get(Lesson, log.reference_id)
+            source_type = "lesson"
+            source_name = lesson.title if lesson else "Lesson không xác định"
+        elif log.reason == "boss_fight" and log.reference_id:
+            boss = await db.get(Boss, log.reference_id)
+            source_type = "boss"
+            source_name = boss.name if boss else "Boss không xác định"
+        elif log.reason in ("daily_refill", "regen"):
+            source_type = "system"
+            source_name = "Hồi năng lượng"
+        elif log.reason == "admin":
+            source_type = "admin"
+            source_name = "Admin điều chỉnh"
+        else:
+            source_type = "other"
+            source_name = log.reason
+
+        out.append(
+            AdminEnergyLogOut(
+                id=log.id,
+                user_id=log.user_id,
+                user_name=user.display_name if user else "Unknown",
+                delta=log.delta,
+                reason=log.reason,
+                energy_after=log.energy_after,
+                reference_id=log.reference_id,
+                source_type=source_type,
+                source_name=source_name,
+                created_at=log.created_at,
+            )
+        )
+
     return out

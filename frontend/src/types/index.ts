@@ -175,10 +175,29 @@ export interface AdminConversation {
   ended_at: string | null;
 }
 
+export interface AdminEnergyLog {
+  id: string;
+  user_id: string;
+  user_name: string;
+  delta: number;
+  reason: string;
+  energy_after: number;
+  reference_id: string | null;
+  source_type: string | null;
+  source_name: string | null;
+  created_at: string;
+}
+
 // ─── Lesson Attempt Feedback ──────────────────────────────────────────────────
 
 export interface LessonCompleteResponse {
   newly_unlocked_achievements: string[];
+}
+
+export interface ExtractedMistake {
+  word_or_phrase: string;
+  type?: string | null;
+  correction?: string | null;
 }
 
 export interface LessonAttemptFeedback {
@@ -190,6 +209,13 @@ export interface LessonAttemptFeedback {
   emotion_score: number;
   overall_score: number;
   feedback_text: string | null;
+  content_feedback?: string | null;
+  speed_feedback?: string | null;
+  emotion_feedback?: string | null;
+  advice_text?: string | null;
+  filler_word_count?: number;
+  extracted_mistakes?: ExtractedMistake[];
+  transcript?: string | null;
   created_at: string;
 }
 

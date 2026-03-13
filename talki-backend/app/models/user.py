@@ -81,7 +81,8 @@ class EnergyLog(Base):
     )
     delta: Mapped[int] = mapped_column(Integer, nullable=False)          # âm = tiêu, dương = nhận
     reason: Mapped[str] = mapped_column(String(100), nullable=False)     # "boss_fight" | "lesson_action" | "regen" | "admin"
-    balance_after: Mapped[int] = mapped_column(Integer, nullable=False)
+    reference_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    energy_after: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     user: Mapped["User"] = relationship(back_populates="energy_logs")

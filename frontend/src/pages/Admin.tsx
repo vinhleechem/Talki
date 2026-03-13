@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   adminApi,
@@ -9,6 +9,7 @@ import {
   AdminBoss,
   AdminPayment,
   AdminConversation,
+  AdminEnergyLog,
   AdminAchievement,
 } from "@/services/adminService";
 import { supabase } from "@/integrations/supabase/client";
@@ -54,6 +55,66 @@ function handleError(err: unknown) {
   });
 }
 
+function paginateItems<T>(items: T[], page: number, pageSize: number): T[] {
+  const start = (page - 1) * pageSize;
+  return items.slice(start, start + pageSize);
+}
+
+function PaginationControls({
+  page,
+  pageSize,
+  total,
+  onPageChange,
+  onPageSizeChange,
+}: {
+  page: number;
+  pageSize: number;
+  total: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (size: number) => void;
+}) {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const start = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const end = Math.min(total, page * pageSize);
+
+  return (
+    <div className="flex flex-col gap-2 p-4 md:flex-row md:items-center md:justify-between" style={{ borderTop: "2px solid black" }}>
+      <p className="text-xs font-black uppercase tracking-wider text-slate-500">
+        Hiển thị {start}-{end} / {total}
+      </p>
+      <div className="flex items-center gap-2">
+        <select
+          className="px-2 py-1 text-xs font-black uppercase bg-white"
+          style={{ border: "2px solid black" }}
+          value={pageSize}
+          onChange={(e) => onPageSizeChange(Number(e.target.value))}
+        >
+          <option value={10}>10 / trang</option>
+          <option value={20}>20 / trang</option>
+          <option value={50}>50 / trang</option>
+        </select>
+        <button
+          className="px-3 py-1 text-xs font-black uppercase disabled:opacity-40"
+          style={{ border: "2px solid black" }}
+          onClick={() => onPageChange(Math.max(1, page - 1))}
+          disabled={page <= 1}
+        >
+          Trước
+        </button>
+        <span className="px-2 text-xs font-black uppercase">{page}/{totalPages}</span>
+        <button
+          className="px-3 py-1 text-xs font-black uppercase disabled:opacity-40"
+          style={{ border: "2px solid black" }}
+          onClick={() => onPageChange(Math.min(totalPages, page + 1))}
+          disabled={page >= totalPages}
+        >
+          Sau
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Nav ─────────────────────────────────────────────────────────────────────
 
 const navItems = [
@@ -85,7 +146,7 @@ const pageTitles: Record<string, { title: string; sub: string }> = {
   users: { title: "QUẢN LÝ NGƯỜI DÙNG", sub: "Xem và cập nhật tài khoản" },
   content: { title: "QUẢN LÝ NỘI DUNG", sub: "Quản lý chapters và lessons" },
   boss: { title: "CÀI ĐẶT BOSS", sub: "Chỉnh sửa nhân vật Boss" },
-  conversations: { title: "NHẬT KÝ BOSS FIGHT", sub: "Lịch sử các trận đấu" },
+  conversations: { title: "NHẬT KÝ NĂNG LƯỢNG", sub: "Theo dõi lesson và boss fight" },
   payment: { title: "THANH TOÁN", sub: "Thống kê và kiểm tra giao dịch" },
   achievements: { title: "THÀNH TỰU", sub: "Quản lý huy hiệu và điều kiện mở khoá" },
 };
@@ -304,6 +365,11 @@ function DashboardPage() {
 function UsersPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [planFilter, setPlanFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Edit/Create modal
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -408,9 +474,24 @@ function UsersPage() {
     }
   }
 
-  if (loading) return <Spinner />;
-
   const planColor: Record<string, string> = { free: "#64748b", monthly: "#0284c7", yearly: "#7c3aed" };
+  const filteredUsers = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    return users.filter((u) => {
+      const matchesText = !q
+        || u.display_name.toLowerCase().includes(q)
+        || u.email.toLowerCase().includes(q)
+        || u.id.toLowerCase().includes(q);
+      const matchesRole = roleFilter === "all" || u.role === roleFilter;
+      const matchesPlan = planFilter === "all" || u.plan === planFilter;
+      return matchesText && matchesRole && matchesPlan;
+    });
+  }, [users, searchTerm, roleFilter, planFilter]);
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pagedUsers = paginateItems(filteredUsers, safePage, pageSize);
+
+  if (loading) return <Spinner />;
 
   return (
     <>
@@ -435,7 +516,7 @@ function UsersPage() {
 
       <div className="bg-white overflow-hidden relative" style={neo.card}>
         <div className="p-4 bg-slate-50 flex justify-between items-center" style={{ borderBottom: "3px solid black" }}>
-          <h4 className="text-sm font-black uppercase tracking-wider italic">Người dùng ({users.length})</h4>
+          <h4 className="text-sm font-black uppercase tracking-wider italic">Người dùng ({filteredUsers.length}/{users.length})</h4>
           <button
             onClick={openCreateModal}
             className="flex items-center gap-1 text-xs font-black px-3 py-2 text-white transition-all active:translate-y-0.5 cursor-pointer hover:brightness-110"
@@ -443,6 +524,46 @@ function UsersPage() {
           >
             <span className="material-symbols-outlined text-sm">add</span> Thêm User
           </button>
+        </div>
+
+        <div className="grid grid-cols-1 gap-2 p-4 md:grid-cols-3" style={{ borderBottom: "2px solid black" }}>
+          <input
+            className="px-3 py-2 text-sm font-bold focus:outline-none"
+            style={{ border: "2px solid black" }}
+            placeholder="Tìm theo tên, email, user ID..."
+            value={searchTerm}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setPage(1);
+            }}
+          />
+          <select
+            className="px-3 py-2 text-sm font-bold bg-white"
+            style={{ border: "2px solid black" }}
+            value={roleFilter}
+            onChange={(e) => {
+              setRoleFilter(e.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="all">Tất cả role</option>
+            <option value="admin">Admin</option>
+            <option value="user">User</option>
+          </select>
+          <select
+            className="px-3 py-2 text-sm font-bold bg-white"
+            style={{ border: "2px solid black" }}
+            value={planFilter}
+            onChange={(e) => {
+              setPlanFilter(e.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="all">Tất cả gói</option>
+            <option value="free">Free</option>
+            <option value="monthly">Monthly</option>
+            <option value="yearly">Yearly</option>
+          </select>
         </div>
 
         <div className="overflow-x-auto">
@@ -459,7 +580,7 @@ function UsersPage() {
               </tr>
             </thead>
             <tbody>
-              {users.map((u, i) => (
+              {pagedUsers.map((u, i) => (
                 <tr
                   key={u.id}
                   className="hover:bg-orange-50 transition-colors"
@@ -538,6 +659,16 @@ function UsersPage() {
             </tbody>
           </table>
         </div>
+        <PaginationControls
+          page={safePage}
+          pageSize={pageSize}
+          total={filteredUsers.length}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setPage(1);
+          }}
+        />
       </div>
 
       {/* ── Edit / Create Modal ── */}
@@ -1161,7 +1292,7 @@ function ChapterCard({
                       </div>
                       
                       <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2 hidden md:flex">
+                        <div className="hidden items-center gap-2 md:flex">
                           <span className="text-[10px] font-black uppercase text-slate-500">Trạng thái:</span>
                           <div 
                               className="px-2 py-0.5 text-[10px] font-black uppercase text-white shadow-neo-sm"
@@ -1367,6 +1498,10 @@ function ContentPage() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [newTitle, setNewTitle] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [publishFilter, setPublishFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     adminApi
@@ -1404,9 +1539,25 @@ function ContentPage() {
     );
   }
 
-  if (loading) return <Spinner />;
-
   const sorted = [...chapters].sort((a, b) => a.order_index - b.order_index);
+  const filteredChapters = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    return sorted.filter((chapter) => {
+      const matchesText = !q
+        || chapter.title.toLowerCase().includes(q)
+        || (chapter.description ?? "").toLowerCase().includes(q);
+      const matchesPublish =
+        publishFilter === "all"
+        || (publishFilter === "published" && chapter.is_published)
+        || (publishFilter === "draft" && !chapter.is_published);
+      return matchesText && matchesPublish;
+    });
+  }, [sorted, searchTerm, publishFilter]);
+  const totalPages = Math.max(1, Math.ceil(filteredChapters.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pagedChapters = paginateItems(filteredChapters, safePage, pageSize);
+
+  if (loading) return <Spinner />;
 
   return (
     <div>
@@ -1419,9 +1570,27 @@ function ContentPage() {
               placeholder="Tìm kiếm chương/bài học..."
               type="text"
               style={{ border: "2px solid black", boxShadow: "2px 2px 0px 0px black" }}
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setPage(1);
+              }}
             />
             <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 font-bold text-slate-400">search</span>
           </div>
+          <select
+            className="h-12 px-3 font-black text-xs uppercase bg-white"
+            style={{ border: "2px solid black", boxShadow: "2px 2px 0px 0px black" }}
+            value={publishFilter}
+            onChange={(e) => {
+              setPublishFilter(e.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="all">Tất cả trạng thái</option>
+            <option value="published">Published</option>
+            <option value="draft">Draft</option>
+          </select>
           <button
             onClick={() => setCreating(true)}
             className="flex items-center gap-2 bg-primary text-white px-6 h-12 font-black uppercase transition-all hover:translate-x-[2px] hover:translate-y-[2px]"
@@ -1461,22 +1630,37 @@ function ContentPage() {
       )}
 
       <div className="grid gap-3">
-        {sorted.length === 0 && <p className="text-sm font-bold text-slate-500">Chưa có chapter nào.</p>}
-        {sorted.map((chapter, idx) => (
+        {filteredChapters.length === 0 && <p className="text-sm font-bold text-slate-500">Không có chapter phù hợp bộ lọc.</p>}
+        {pagedChapters.map((chapter) => {
+          const globalIdx = sorted.findIndex((x) => x.id === chapter.id);
+          return (
           <ChapterCard
             key={chapter.id}
             chapter={chapter}
-            isFirst={idx === 0}
-            isLast={idx === sorted.length - 1}
-            onMoveUp={() => moveChapter(idx, -1)}
-            onMoveDown={() => moveChapter(idx, 1)}
+            isFirst={globalIdx === 0}
+            isLast={globalIdx === sorted.length - 1}
+            onMoveUp={() => moveChapter(globalIdx, -1)}
+            onMoveDown={() => moveChapter(globalIdx, 1)}
             onUpdate={(updated) => setChapters((c) => c.map((x) => (x.id === updated.id ? updated : x)))}
             onDelete={(id) => {
               adminApi.deleteChapter(id);
               setChapters((c) => c.filter((x) => x.id !== id));
             }}
           />
-        ))}
+          );
+        })}
+      </div>
+      <div className="mt-3 bg-white" style={neo.card}>
+        <PaginationControls
+          page={safePage}
+          pageSize={pageSize}
+          total={filteredChapters.length}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setPage(1);
+          }}
+        />
       </div>
     </div>
   );
@@ -1511,6 +1695,10 @@ function BossPage() {
     avatar_url: "",
     is_published: false,
   });
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     // Load chapters and bosses in parallel; chapters failing is critical
@@ -1581,9 +1769,32 @@ function BossPage() {
     }
   }
 
-  if (loading) return <Spinner />;
-
   const bossMap = Object.fromEntries(bosses.map((b) => [b.chapter_id, b]));
+  const chapterRows = chapters.map((chapter) => ({
+    chapter,
+    boss: bossMap[chapter.id],
+  }));
+  const filteredRows = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    return chapterRows.filter(({ chapter, boss }) => {
+      const matchesText = !q
+        || chapter.title.toLowerCase().includes(q)
+        || (boss?.name ?? "").toLowerCase().includes(q)
+        || (boss?.mission_prompt ?? "").toLowerCase().includes(q);
+      const matchesStatus =
+        statusFilter === "all"
+        || (statusFilter === "with_boss" && !!boss)
+        || (statusFilter === "without_boss" && !boss)
+        || (statusFilter === "published" && !!boss && boss.is_published)
+        || (statusFilter === "draft" && !!boss && !boss.is_published);
+      return matchesText && matchesStatus;
+    });
+  }, [chapterRows, searchTerm, statusFilter]);
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pagedRows = paginateItems(filteredRows, safePage, pageSize);
+
+  if (loading) return <Spinner />;
 
   if (editing || (creating && creating !== "preview")) {
     const isCreating = !!creating && creating !== "preview";
@@ -1754,6 +1965,36 @@ function BossPage() {
 
   return (
     <div className="grid gap-4">
+      <div className="grid grid-cols-1 gap-2 bg-white p-4 md:grid-cols-3" style={neo.card}>
+        <input
+          className="px-3 py-2 text-sm font-bold focus:outline-none"
+          style={{ border: "2px solid black" }}
+          placeholder="Tìm theo chapter hoặc tên boss..."
+          value={searchTerm}
+          onChange={(e) => {
+            setSearchTerm(e.target.value);
+            setPage(1);
+          }}
+        />
+        <select
+          className="px-3 py-2 text-sm font-bold bg-white"
+          style={{ border: "2px solid black" }}
+          value={statusFilter}
+          onChange={(e) => {
+            setStatusFilter(e.target.value);
+            setPage(1);
+          }}
+        >
+          <option value="all">Tất cả</option>
+          <option value="with_boss">Đã có boss</option>
+          <option value="without_boss">Chưa có boss</option>
+          <option value="published">Boss published</option>
+          <option value="draft">Boss draft</option>
+        </select>
+        <div className="flex items-center justify-center text-xs font-black uppercase tracking-wider text-slate-500" style={{ border: "2px solid black" }}>
+          {filteredRows.length} mục phù hợp
+        </div>
+      </div>
       {chaptersError && (
         <div className="p-6 bg-red-50 flex items-center gap-4" style={{ border: "3px solid #ef4444", boxShadow: "4px 4px 0px 0px #ef4444" }}>
           <span className="material-symbols-outlined text-3xl text-red-500">error</span>
@@ -1770,8 +2011,7 @@ function BossPage() {
           <p className="font-bold text-slate-500 max-w-md mx-auto">Bạn cần tạo ít nhất một Chapter (bên trang Bài học) để có thể gán Boss Fight vào cuối Chapter đó.</p>
         </div>
       )}
-      {chapters.map((chapter) => {
-        const boss = bossMap[chapter.id];
+      {pagedRows.map(({ chapter, boss }) => {
         return (
           <div key={chapter.id} className="bg-white overflow-hidden" style={neo.card}>
             <div
@@ -1854,6 +2094,18 @@ function BossPage() {
           </div>
         );
       })}
+      <div className="bg-white" style={neo.card}>
+        <PaginationControls
+          page={safePage}
+          pageSize={pageSize}
+          total={filteredRows.length}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setPage(1);
+          }}
+        />
+      </div>
     </div>
   );
 }
@@ -1865,6 +2117,10 @@ function AchievementsPage() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [conditionFilter, setConditionFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const editOpen = editing !== null;
   const blankForm = { name: "", description: "", icon_url: "", condition_type: "streak", condition_value: 7 };
   const [form, setForm] = useState(blankForm);
@@ -1906,6 +2162,20 @@ function AchievementsPage() {
   }
 
   const conditionTypes = ["streak", "scenes_completed", "total_stars"];
+  const filteredAchievements = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    return achievements.filter((a) => {
+      const matchesText = !q
+        || a.name.toLowerCase().includes(q)
+        || a.code.toLowerCase().includes(q)
+        || a.description.toLowerCase().includes(q);
+      const matchesCondition = conditionFilter === "all" || a.condition_type === conditionFilter;
+      return matchesText && matchesCondition;
+    });
+  }, [achievements, searchTerm, conditionFilter]);
+  const totalPages = Math.max(1, Math.ceil(filteredAchievements.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pagedAchievements = paginateItems(filteredAchievements, safePage, pageSize);
 
   function AchievementForm({
     f,
@@ -1998,7 +2268,7 @@ function AchievementsPage() {
   return (
     <div>
       <div className="flex justify-between items-center mb-4">
-        <h4 className="text-sm font-black uppercase tracking-wider italic">Thành tựu ({achievements.length})</h4>
+        <h4 className="text-sm font-black uppercase tracking-wider italic">Thành tựu ({filteredAchievements.length}/{achievements.length})</h4>
         <button
           onClick={() => setCreating(true)}
           className="flex items-center gap-1 text-xs font-black px-3 py-2 text-white"
@@ -2006,6 +2276,33 @@ function AchievementsPage() {
         >
           <span className="material-symbols-outlined text-sm">add</span> Thêm thành tựu
         </button>
+      </div>
+
+      <div className="grid grid-cols-1 gap-2 bg-white p-4 md:grid-cols-2" style={neo.card}>
+        <input
+          className="px-3 py-2 text-sm font-bold focus:outline-none"
+          style={{ border: "2px solid black" }}
+          placeholder="Tìm theo tên, code, mô tả..."
+          value={searchTerm}
+          onChange={(e) => {
+            setSearchTerm(e.target.value);
+            setPage(1);
+          }}
+        />
+        <select
+          className="px-3 py-2 text-sm font-bold bg-white"
+          style={{ border: "2px solid black" }}
+          value={conditionFilter}
+          onChange={(e) => {
+            setConditionFilter(e.target.value);
+            setPage(1);
+          }}
+        >
+          <option value="all">Tất cả điều kiện</option>
+          {conditionTypes.map((t) => (
+            <option key={t} value={t}>{t}</option>
+          ))}
+        </select>
       </div>
 
       <Dialog
@@ -2033,10 +2330,10 @@ function AchievementsPage() {
       </Dialog>
 
       <div className="grid gap-3">
-        {achievements.length === 0 && !creating && (
+        {filteredAchievements.length === 0 && !creating && (
           <p className="text-sm font-bold text-slate-500">Chưa có thành tựu nào.</p>
         )}
-        {achievements.map((a) => (
+        {pagedAchievements.map((a) => (
           <div key={a.id} className="bg-white overflow-hidden" style={neo.card}>
             <div className="p-4 flex items-start gap-4">
               <div
@@ -2087,6 +2384,18 @@ function AchievementsPage() {
           </div>
         ))}
       </div>
+      <div className="mt-3 bg-white" style={neo.card}>
+        <PaginationControls
+          page={safePage}
+          pageSize={pageSize}
+          total={filteredAchievements.length}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setPage(1);
+          }}
+        />
+      </div>
 
       <Dialog
         open={editOpen}
@@ -2118,25 +2427,83 @@ function AchievementsPage() {
 // ─── Sub-page: Conversations ──────────────────────────────────────────────────
 
 function ConversationsPage() {
-  const [convs, setConvs] = useState<AdminConversation[]>([]);
+  const [logs, setLogs] = useState<AdminEnergyLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
   useEffect(() => {
     adminApi
-      .listConversations(0, 50)
-      .then(setConvs)
+      .listEnergyLogs(0, 100)
+      .then(setLogs)
       .finally(() => setLoading(false));
   }, []);
 
-  const statusColor: Record<string, string> = { completed: "black", active: PRIMARY, abandoned: "#94a3b8" };
-  const statusLabel: Record<string, string> = { completed: "Hoàn thành", active: "Đang đấu", abandoned: "Bỏ cuộc" };
+  const sourceLabel: Record<string, string> = {
+    lesson: "Lesson",
+    boss: "Boss Fight",
+    system: "Hệ thống",
+    admin: "Admin",
+    other: "Khác",
+  };
+  const sourceColor: Record<string, string> = {
+    lesson: "#2563eb",
+    boss: PRIMARY,
+    system: "#64748b",
+    admin: "black",
+    other: "#94a3b8",
+  };
+  const filteredLogs = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    return logs.filter((log) => {
+      const matchesText = !q
+        || log.user_name.toLowerCase().includes(q)
+        || (log.source_name ?? "").toLowerCase().includes(q)
+        || log.reason.toLowerCase().includes(q);
+      const matchesSource = sourceFilter === "all" || (log.source_type ?? "other") === sourceFilter;
+      return matchesText && matchesSource;
+    });
+  }, [logs, searchTerm, sourceFilter]);
+  const totalPages = Math.max(1, Math.ceil(filteredLogs.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pagedLogs = paginateItems(filteredLogs, safePage, pageSize);
 
   if (loading) return <Spinner />;
 
   return (
     <div className="bg-white overflow-hidden" style={neo.card}>
       <div className="p-4 bg-slate-50" style={{ borderBottom: "3px solid black" }}>
-        <h4 className="text-sm font-black uppercase tracking-wider italic">Boss Fight Log ({convs.length})</h4>
+        <h4 className="text-sm font-black uppercase tracking-wider italic">Energy Log ({filteredLogs.length}/{logs.length})</h4>
+      </div>
+      <div className="grid grid-cols-1 gap-2 p-4 md:grid-cols-2" style={{ borderBottom: "2px solid black" }}>
+        <input
+          className="px-3 py-2 text-sm font-bold focus:outline-none"
+          style={{ border: "2px solid black" }}
+          placeholder="Tìm theo người dùng, nguồn, reason..."
+          value={searchTerm}
+          onChange={(e) => {
+            setSearchTerm(e.target.value);
+            setPage(1);
+          }}
+        />
+        <select
+          className="px-3 py-2 text-sm font-bold bg-white"
+          style={{ border: "2px solid black" }}
+          value={sourceFilter}
+          onChange={(e) => {
+            setSourceFilter(e.target.value);
+            setPage(1);
+          }}
+        >
+          <option value="all">Tất cả nguồn</option>
+          <option value="lesson">Lesson</option>
+          <option value="boss">Boss Fight</option>
+          <option value="system">Hệ thống</option>
+          <option value="admin">Admin</option>
+          <option value="other">Khác</option>
+        </select>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-left">
@@ -2146,36 +2513,50 @@ function ConversationsPage() {
               style={{ borderBottom: "3px solid black" }}
             >
               <th className="px-4 py-3">Người dùng</th>
-              <th className="px-4 py-3">Boss</th>
-              <th className="px-4 py-3">Trạng thái</th>
-              <th className="px-4 py-3">Bắt đầu</th>
-              <th className="px-4 py-3">Kết thúc</th>
+              <th className="px-4 py-3">Nguồn</th>
+              <th className="px-4 py-3">Chi tiết</th>
+              <th className="px-4 py-3 text-center">Biến động</th>
+              <th className="px-4 py-3 text-center">Còn lại</th>
+              <th className="px-4 py-3">Thời gian</th>
             </tr>
           </thead>
           <tbody>
-            {convs.map((c) => (
+            {pagedLogs.map((log) => (
               <tr
-                key={c.id}
+                key={log.id}
                 className="hover:bg-orange-50 transition-colors"
                 style={{ borderBottom: "1px solid rgba(0,0,0,0.08)" }}
               >
-                <td className="px-4 py-3 font-bold text-sm">{c.user_name}</td>
-                <td className="px-4 py-3 font-bold text-sm italic">{c.boss_name}</td>
+                <td className="px-4 py-3 font-bold text-sm">{log.user_name}</td>
                 <td className="px-4 py-3">
                   <span
                     className="text-[10px] font-black px-2 py-0.5 uppercase text-white"
-                    style={{ backgroundColor: statusColor[c.status] ?? "#94a3b8" }}
+                    style={{ backgroundColor: sourceColor[log.source_type ?? "other"] ?? "#94a3b8" }}
                   >
-                    {statusLabel[c.status] ?? c.status}
+                    {sourceLabel[log.source_type ?? "other"] ?? "Khác"}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-xs text-slate-500">{timeAgo(c.started_at)}</td>
-                <td className="px-4 py-3 text-xs text-slate-500">{c.ended_at ? timeAgo(c.ended_at) : "—"}</td>
+                <td className="px-4 py-3 text-xs text-slate-600 font-bold">{log.source_name ?? log.reason}</td>
+                <td className={`px-4 py-3 text-sm font-black text-center ${log.delta < 0 ? "text-red-600" : "text-green-600"}`}>
+                  {log.delta > 0 ? `+${log.delta}` : log.delta}
+                </td>
+                <td className="px-4 py-3 text-sm font-black text-center">{log.energy_after}</td>
+                <td className="px-4 py-3 text-xs text-slate-500">{timeAgo(log.created_at)}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      <PaginationControls
+        page={safePage}
+        pageSize={pageSize}
+        total={filteredLogs.length}
+        onPageChange={setPage}
+        onPageSizeChange={(size) => {
+          setPageSize(size);
+          setPage(1);
+        }}
+      />
     </div>
   );
 }
@@ -2185,6 +2566,10 @@ function ConversationsPage() {
 function PaymentsPage() {
   const [payments, setPayments] = useState<AdminPayment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
   useEffect(() => {
     adminApi
@@ -2199,7 +2584,22 @@ function PaymentsPage() {
     failed: "#dc2626",
     cancelled: "#94a3b8",
   };
-  const totalRevenue = payments.filter((p) => p.status === "paid").reduce((s, p) => s + p.amount_vnd, 0);
+  const filteredPayments = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    return payments.filter((p) => {
+      const matchesText = !q
+        || p.user_id.toLowerCase().includes(q)
+        || p.plan.toLowerCase().includes(q)
+        || p.status.toLowerCase().includes(q)
+        || p.amount_vnd.toString().includes(q);
+      const matchesStatus = statusFilter === "all" || p.status === statusFilter;
+      return matchesText && matchesStatus;
+    });
+  }, [payments, searchTerm, statusFilter]);
+  const totalRevenue = filteredPayments.filter((p) => p.status === "paid").reduce((s, p) => s + p.amount_vnd, 0);
+  const totalPages = Math.max(1, Math.ceil(filteredPayments.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pagedPayments = paginateItems(filteredPayments, safePage, pageSize);
 
   if (loading) return <Spinner />;
 
@@ -2212,6 +2612,33 @@ function PaymentsPage() {
         </span>
       </div>
       <div className="bg-white overflow-hidden" style={neo.card}>
+        <div className="grid grid-cols-1 gap-2 p-4 md:grid-cols-2" style={{ borderBottom: "2px solid black" }}>
+          <input
+            className="px-3 py-2 text-sm font-bold focus:outline-none"
+            style={{ border: "2px solid black" }}
+            placeholder="Tìm theo user ID, gói, trạng thái, số tiền..."
+            value={searchTerm}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setPage(1);
+            }}
+          />
+          <select
+            className="px-3 py-2 text-sm font-bold bg-white"
+            style={{ border: "2px solid black" }}
+            value={statusFilter}
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="all">Tất cả trạng thái</option>
+            <option value="paid">paid</option>
+            <option value="pending">pending</option>
+            <option value="failed">failed</option>
+            <option value="cancelled">cancelled</option>
+          </select>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
@@ -2228,7 +2655,7 @@ function PaymentsPage() {
               </tr>
             </thead>
             <tbody>
-              {payments.map((p) => (
+              {pagedPayments.map((p) => (
                 <tr key={p.id} className="hover:bg-orange-50" style={{ borderBottom: "1px solid rgba(0,0,0,0.08)" }}>
                   <td className="px-4 py-3 text-xs text-slate-500 font-mono">{p.user_id.slice(0, 8)}…</td>
                   <td className="px-4 py-3 font-bold uppercase text-sm">{p.plan}</td>
@@ -2252,6 +2679,16 @@ function PaymentsPage() {
             </tbody>
           </table>
         </div>
+        <PaginationControls
+          page={safePage}
+          pageSize={pageSize}
+          total={filteredPayments.length}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setPage(1);
+          }}
+        />
       </div>
     </>
   );

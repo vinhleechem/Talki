@@ -1,7 +1,7 @@
 """Learning path endpoints – chapters, lessons, progress (V2.1: no separate levels table)."""
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,7 +23,7 @@ from app.schemas.lesson import (
     LessonOut,
     MarkLessonCompleteRequest,
 )
-from app.services import achievement_service
+from app.services import achievement_service, lesson_service
 
 router = APIRouter(prefix="/lessons", tags=["lessons"])
 
@@ -110,7 +110,7 @@ async def list_chapters(
     return out
 
 
-@router.post("/lessons/{lesson_id}/complete", response_model=LessonCompleteResponse)
+@router.post("/{lesson_id}/complete", response_model=LessonCompleteResponse)
 async def mark_lesson_complete(
     lesson_id: uuid.UUID,
     body: MarkLessonCompleteRequest,
@@ -138,14 +138,39 @@ async def mark_lesson_complete(
     return LessonCompleteResponse(newly_unlocked_achievements=newly_unlocked)
 
 
-@router.post("/lessons/{lesson_id}/feedback", response_model=LessonAttemptFeedbackOut, status_code=201)
+
+@router.post("/{lesson_id}/practice", response_model=LessonAttemptFeedbackOut, status_code=201)
+async def evaluate_lesson_practice(
+    lesson_id: uuid.UUID,
+    audio: UploadFile = File(..., description="WebM/Opus audio from microphone"),
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Save AI-scored feedback for a lesson action attempt from an audio upload."""
+    uid = uuid.UUID(user_id)
+    audio_bytes = await audio.read()
+    
+    try:
+        return await lesson_service.evaluate_practice(db, uid, lesson_id, audio_bytes)
+    except ValueError as e:
+        if "Heart" in str(e) or "heart" in str(e):
+            raise HTTPException(status_code=402, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi máy chủ: {str(e)}")
+
+@router.post("/{lesson_id}/feedback", response_model=LessonAttemptFeedbackOut, status_code=201)
 async def submit_lesson_feedback(
     lesson_id: uuid.UUID,
     body: LessonAttemptFeedbackCreate,
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
-    """Save AI-scored feedback for a lesson action attempt."""
+    """Save manual feedback for a lesson action attempt (Deprecated/Mock)."""
     uid = uuid.UUID(user_id)
 
     # Count previous attempts to set attempt_number
@@ -179,7 +204,7 @@ async def submit_lesson_feedback(
     )
 
 
-@router.get("/lessons/{lesson_id}/feedback", response_model=list[LessonAttemptFeedbackOut])
+@router.get("/{lesson_id}/feedback", response_model=list[LessonAttemptFeedbackOut])
 async def get_lesson_feedbacks(
     lesson_id: uuid.UUID,
     user_id: str = Depends(get_current_user_id),

@@ -11,15 +11,36 @@ async function getAuthHeader(): Promise<Record<string, string>> {
 
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = await getAuthHeader();
+  const defaultHeaders = options.body instanceof FormData 
+    ? { ...headers } 
+    : { "Content-Type": "application/json", ...headers };
+
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
-    headers: { "Content-Type": "application/json", ...headers, ...options.headers },
+    headers: { ...defaultHeaders, ...options.headers },
   });
+
+  const parseResponseBody = async (): Promise<unknown> => {
+    if (res.status === 204) return undefined;
+    const text = await res.text();
+    if (!text) return undefined;
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text;
+    }
+  };
+
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail ?? "API error");
+    const err = await parseResponseBody();
+    if (typeof err === "object" && err && "detail" in err) {
+      throw new Error(String((err as { detail?: unknown }).detail ?? "API error"));
+    }
+    throw new Error(typeof err === "string" ? err : res.statusText || "API error");
   }
-  return res.json() as Promise<T>;
+
+  const body = await parseResponseBody();
+  return body as T;
 }
 
 export { apiFetch, getAuthHeader, API_BASE };

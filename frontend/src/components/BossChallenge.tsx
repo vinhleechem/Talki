@@ -7,6 +7,7 @@ import { ArrowLeft, Trophy, Mic, MicOff, Volume2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { VoiceRecorder, VoiceSynthesis, VoiceRecognition } from "@/utils/voiceRecorder";
+import Navbar from "@/components/Navbar";
 
 interface Message {
   role: "user" | "assistant";
@@ -255,33 +256,37 @@ const BossChallenge = ({ scenario, scenarioName, gender, personality, personalit
 
   if (isEvaluating && finalScore !== null) {
     return (
-      <div className="min-h-screen pb-20 flex items-center justify-center">
-        <Card className="p-8 max-w-lg neo-border neo-shadow">
-          <div className="text-center space-y-6">
-            <Trophy className={`w-24 h-24 mx-auto ${finalScore >= 60 ? 'text-primary' : 'text-muted-foreground'}`} />
-            <div>
-              <h2 className="text-3xl font-black mb-2">
-                {finalScore >= 60 ? 'Boss Defeated! 🎉' : 'Try Again 💪'}
-              </h2>
-              <div className="text-6xl font-black my-4">{finalScore}/100</div>
-              <p className="text-lg font-medium text-muted-foreground">{feedback}</p>
+      <div className="min-h-screen pb-20 bg-background">
+        <Navbar />
+        <div className="flex items-center justify-center pt-24 px-4">
+          <Card className="p-8 max-w-lg neo-border neo-shadow">
+            <div className="text-center space-y-6">
+              <Trophy className={`w-24 h-24 mx-auto ${finalScore >= 60 ? "text-primary" : "text-muted-foreground"}`} />
+              <div>
+                <h2 className="text-3xl font-black mb-2">
+                  {finalScore >= 60 ? "Boss Defeated! 🎉" : "Try Again 💪"}
+                </h2>
+                <div className="text-6xl font-black my-4">{finalScore}/100</div>
+                <p className="text-lg font-medium text-muted-foreground">{feedback}</p>
+              </div>
+              <Button
+                variant="hero"
+                size="lg"
+                onClick={() => navigate("/roadmap")}
+                className="w-full"
+              >
+                Back to Road Map
+              </Button>
             </div>
-            <Button 
-              variant="hero" 
-              size="lg" 
-              onClick={() => navigate('/roadmap')}
-              className="w-full"
-            >
-              Back to Road Map
-            </Button>
-          </div>
-        </Card>
+          </Card>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen pb-20">
+    <div className="min-h-screen pb-20 bg-background">
+      <Navbar />
       <div className="container mx-auto px-4 pt-24 max-w-4xl">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">

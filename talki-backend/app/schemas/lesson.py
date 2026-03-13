@@ -59,6 +59,12 @@ class LessonAttemptFeedbackCreate(BaseModel):
     feedback_text: str | None = None
 
 
+class ExtractedMistakeOut(BaseModel):
+    word_or_phrase: str
+    type: str | None = None
+    correction: str | None = None
+
+
 class LessonAttemptFeedbackOut(BaseModel):
     id: uuid.UUID
     lesson_id: uuid.UUID
@@ -68,6 +74,13 @@ class LessonAttemptFeedbackOut(BaseModel):
     emotion_score: float
     overall_score: float
     feedback_text: str | None
+    content_feedback: str | None = None
+    speed_feedback: str | None = None
+    emotion_feedback: str | None = None
+    advice_text: str | None = None
+    filler_word_count: int = 0
+    extracted_mistakes: list[ExtractedMistakeOut] = []
+    transcript: str | None = None
     created_at: str
 
     model_config = {"from_attributes": True}

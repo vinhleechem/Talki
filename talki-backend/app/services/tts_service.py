@@ -1,4 +1,7 @@
 """Text-to-Speech using Google Cloud TTS – returns MP3 bytes."""
+import json
+import os
+
 try:
     from google.cloud import texttospeech
     _TTS_AVAILABLE = True
@@ -8,12 +11,32 @@ except ImportError:
 from app.core.config import settings
 
 
+def _get_credentials_path() -> str:
+    return settings.GOOGLE_CLOUD_CREDENTIALS_JSON or os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "")
+
+
+def _get_credentials_info() -> dict | None:
+    raw_value = settings.GOOGLE_CLOUD_CREDENTIALS_JSON.strip()
+    if not raw_value:
+        return None
+    if raw_value.startswith("{"):
+        return json.loads(raw_value)
+    return None
+
+
 def _get_client():
     if not _TTS_AVAILABLE:
         raise RuntimeError("google-cloud-texttospeech not installed. Run: pip install google-cloud-texttospeech")
-    if settings.GOOGLE_CLOUD_CREDENTIALS_JSON:
+    credentials_info = _get_credentials_info()
+    if credentials_info:
+        return texttospeech.TextToSpeechClient.from_service_account_info(credentials_info)
+
+    credentials_path = _get_credentials_path()
+    if credentials_path:
+        if not os.path.exists(credentials_path):
+            raise RuntimeError(f"Không tìm thấy file Google Cloud credentials: {credentials_path}")
         return texttospeech.TextToSpeechClient.from_service_account_file(
-            settings.GOOGLE_CLOUD_CREDENTIALS_JSON
+            credentials_path
         )
     return texttospeech.TextToSpeechClient()
 

@@ -7,6 +7,7 @@ import type {
   AdminBoss,
   AdminPayment,
   AdminConversation,
+  AdminEnergyLog,
   AdminAchievement,
 } from "@/types";
 
@@ -18,6 +19,7 @@ export type {
   AdminBoss,
   AdminPayment,
   AdminConversation,
+  AdminEnergyLog,
   AdminAchievement,
 };
 
@@ -60,6 +62,10 @@ export const adminApi = {
   // Conversations
   listConversations: (skip = 0, limit = 20) =>
     apiFetch<AdminConversation[]>(`/admin/conversations?skip=${skip}&limit=${limit}`),
+
+  // Energy logs
+  listEnergyLogs: (skip = 0, limit = 100) =>
+    apiFetch<AdminEnergyLog[]>(`/admin/energy-logs?skip=${skip}&limit=${limit}`),
 
   // Achievements
   listAchievements: () => apiFetch<AdminAchievement[]>("/admin/achievements"),
