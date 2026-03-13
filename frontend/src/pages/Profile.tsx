@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { User, Mail, Calendar, LogOut, Edit2, Crown, Zap, Star } from "lucide-react";
+import { User, Mail, Calendar, LogOut, Edit2, Crown, Zap, Star, History } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { supabase } from "@/integrations/supabase/client";
 import { useProgress } from "@/hooks/useProgress";
@@ -280,6 +280,16 @@ const Profile = () => {
             </div>
           </div>
         </div>
+
+        {/* Lịch sử luyện tập */}
+        <Button
+          variant="outline"
+          onClick={() => navigate("/history")}
+          className="w-full font-bold"
+        >
+          <History className="w-4 h-4 mr-2" />
+          Lịch sử luyện tập
+        </Button>
 
         {/* Logout */}
         <Button

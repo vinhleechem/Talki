@@ -51,14 +51,6 @@ class LessonCompleteResponse(BaseModel):
     newly_unlocked_achievements: list[str] = []
 
 
-class LessonAttemptFeedbackCreate(BaseModel):
-    content_score: float = 0.0
-    speed_score: float = 0.0
-    emotion_score: float = 0.0
-    overall_score: float = 0.0
-    feedback_text: str | None = None
-
-
 class ExtractedMistakeOut(BaseModel):
     word_or_phrase: str
     type: str | None = None
@@ -69,11 +61,13 @@ class LessonAttemptFeedbackOut(BaseModel):
     id: uuid.UUID
     lesson_id: uuid.UUID
     attempt_number: int
+    stars: int
+    score: int
     content_score: float
     speed_score: float
     emotion_score: float
     overall_score: float
-    feedback_text: str | None
+    feedback_text: str | None = None
     content_feedback: str | None = None
     speed_feedback: str | None = None
     emotion_feedback: str | None = None
@@ -84,3 +78,26 @@ class LessonAttemptFeedbackOut(BaseModel):
     created_at: str
 
     model_config = {"from_attributes": True}
+
+
+class LessonAttemptHistoryOut(BaseModel):
+    """Flat feedback record enriched with lesson/chapter info for history view."""
+    id: uuid.UUID
+    lesson_id: uuid.UUID
+    lesson_title: str
+    chapter_title: str
+    attempt_number: int
+    stars: int
+    score: int
+    content_score: float
+    speed_score: float
+    emotion_score: float
+    overall_score: float
+    transcript: str | None = None
+    feedback_text: str | None = None
+    content_feedback: str | None = None
+    speed_feedback: str | None = None
+    emotion_feedback: str | None = None
+    advice_text: str | None = None
+    filler_word_count: int = 0
+    created_at: str

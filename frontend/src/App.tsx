@@ -12,6 +12,7 @@ import Practice from "./pages/Practice";
 import BossChallengeWrapper from "./pages/BossChallengeWrapper";
 import Achievements from "./pages/Achievements";
 import Profile from "./pages/Profile";
+import FeedbackHistory from "./pages/FeedbackHistory";
 import PhoBan from "./pages/PhoBan";
 import Payment from "./pages/Payment";
 import NotFound from "./pages/NotFound";
@@ -75,6 +76,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Profile />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/history"
+              element={
+                <ProtectedRoute>
+                  <FeedbackHistory />
                 </ProtectedRoute>
               }
             />

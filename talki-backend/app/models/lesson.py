@@ -118,17 +118,15 @@ class LessonAttemptFeedback(Base):
         UUID(as_uuid=True), ForeignKey("lessons.id", ondelete="CASCADE"), index=True
     )
     attempt_number: Mapped[int] = mapped_column(Integer, default=1)
-    # Existing DB columns (from original schema)
     audio_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     transcript: Mapped[str | None] = mapped_column(Text, nullable=True)
-    stars: Mapped[int] = mapped_column(Integer, default=0)          # 0-5
-    score: Mapped[int] = mapped_column(Integer, default=0)          # 0-100 integer
+    stars: Mapped[int] = mapped_column(Integer, default=0)           # 0-5
+    score: Mapped[int] = mapped_column(Integer, default=0)           # 0-100
     content_feedback: Mapped[str | None] = mapped_column(Text, nullable=True)
     speed_feedback: Mapped[str | None] = mapped_column(Text, nullable=True)
     emotion_feedback: Mapped[str | None] = mapped_column(Text, nullable=True)
     advice_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     filler_word_count: Mapped[int] = mapped_column(Integer, default=0)
-    # Numeric score columns (added via migration 20260313000000)
     content_score: Mapped[float] = mapped_column(Float, default=0.0)   # 0-10
     speed_score: Mapped[float] = mapped_column(Float, default=0.0)     # 0-10
     emotion_score: Mapped[float] = mapped_column(Float, default=0.0)   # 0-10

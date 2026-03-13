@@ -1,5 +1,6 @@
 """Google Gemini – AI Mentor chat and feedback generation."""
 import json
+import re as _re
 
 from google import genai
 from google.genai import types
@@ -20,26 +21,39 @@ def _get_client() -> genai.Client:
     return genai.Client(api_key=settings.GEMINI_API_KEY)
 
 
-def _strip_code_fence(raw: str) -> str:
-    cleaned = raw.strip()
-    if cleaned.startswith("```"):
-        parts = cleaned.split("```")
-        if len(parts) >= 2:
-            cleaned = parts[1].strip()
-    if cleaned.startswith("json"):
-        cleaned = cleaned[4:].strip()
-    return cleaned
+def _extract_json(raw: str) -> str:
+    """Strip code fences then find the first {...} JSON object in the text."""
+    text = raw.strip()
+
+    # Remove any ``` ... ``` fence variants
+    text = _re.sub(r"```(?:json)?\s*", "", text).strip()
+    text = text.rstrip("`").strip()
+
+    # Try to grab the first {...} block (handles extra prose before/after)
+    match = _re.search(r"\{[\s\S]*\}", text)
+    if match:
+        return match.group(0)
+
+    return text
 
 
 def _parse_json_response(raw: str, context: str) -> dict:
-    cleaned = _strip_code_fence(raw)
-    if not cleaned:
+    if not raw or not raw.strip():
         raise RuntimeError(f"Gemini không trả về nội dung cho {context}.")
+
+    cleaned = _extract_json(raw)
 
     try:
         payload = json.loads(cleaned)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(f"Gemini không trả về JSON hợp lệ cho {context}.") from exc
+    except json.JSONDecodeError:
+        # Last resort: try the original stripped text
+        try:
+            payload = json.loads(raw.strip())
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                f"Gemini không trả về JSON hợp lệ cho {context}. "
+                f"Response đầu: {raw[:200]!r}"
+            ) from exc
 
     if not isinstance(payload, dict):
         raise RuntimeError(f"Gemini trả về dữ liệu không hợp lệ cho {context}.")
@@ -187,18 +201,41 @@ async def evaluate_lesson_practice(
         '  "content_score": <0-10>,\n'
         '  "overall_score": <0-100>,\n'  # Based on 100 max
         '  "total_filler_words": <số nguyên>,\n'
-        '  "feedback_text": "<nhận xét chi tiết cho người dùng>",\n'
-        '  "content_feedback": "<nhận xét riêng về nội dung>",\n'
-        '  "speed_feedback": "<nhận xét riêng về độ trôi chảy/tốc độ>",\n'
-        '  "emotion_feedback": "<nhận xét riêng về cảm xúc/tông giọng>",\n'
-        '  "advice_text": "<lời khuyên cụ thể để cải thiện lần sau>",\n'
+        '  "feedback_text": "<nhận xét tổng quan>",\n'
+        '  "content_feedback": "<nhận xét về nội dung – dùng **từ khoá quan trọng** để in đậm, *cụm từ cần chú ý* để in nghiêng>",\n'
+        '  "speed_feedback": "<nhận xét về độ trôi chảy/tốc độ – dùng **từ khoá quan trọng** và *cụm từ nhấn mạnh*>",\n'
+        '  "emotion_feedback": "<nhận xét về cảm xúc/tông giọng – dùng **từ khoá quan trọng** và *cụm từ nhấn mạnh*>",\n'
+        '  "advice_text": "<lời khuyên cụ thể – dùng **hành động cần làm** và *ví dụ minh hoạ* bằng in đậm/in nghiêng>",\n'
         '  "extracted_mistakes": [{"word_or_phrase": "...", "type": "...", "correction": "..."}]\n'
         "}\n"
-        "Trong đó 'type' của mistake phải là một trong các giá trị: 'grammar', 'vocabulary', 'pronunciation', 'filler'.\n"
-        "Chỉ trả về JSON, không thêm markdown hay giải thích."
+        "QUY TẮC ĐỊNH DẠNG TEXT:\n"
+        "- Dùng **từ hoặc cụm từ** (hai dấu sao) để IN ĐẬM những điểm quan trọng nhất.\n"
+        "- Dùng *từ hoặc cụm từ* (một dấu sao) để IN NGHIÊNG những ví dụ hoặc từ cần lưu ý.\n"
+        "- Mỗi trường feedback nên có ít nhất 1-2 đoạn in đậm/in nghiêng.\n"
+        "Trong đó 'type' của mistake phải là một trong: 'grammar', 'vocabulary', 'pronunciation', 'filler'.\n"
+        "Chỉ trả về JSON, không bọc trong markdown code fence."
     )
     response = await _get_client().aio.models.generate_content(
         model=settings.GEMINI_MODEL,
         contents=[types.Content(role="user", parts=[types.Part(text=prompt)])],
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+        ),
     )
-    return _normalize_practice_feedback(_parse_json_response(response.text or "", "bài practice"))
+    try:
+        return _normalize_practice_feedback(_parse_json_response(response.text or "", "bài practice"))
+    except RuntimeError:
+        # Fallback: AI trả về không phải JSON – trả về điểm mặc định để user không bị lỗi
+        return _normalize_practice_feedback({
+            "fluency_score": 5,
+            "confidence_score": 5,
+            "content_score": 5,
+            "overall_score": 50,
+            "total_filler_words": 0,
+            "feedback_text": "AI không thể phân tích lần này. Hãy thử lại!",
+            "content_feedback": "Không thể phân tích nội dung lần này.",
+            "speed_feedback": "Không thể phân tích tốc độ lần này.",
+            "emotion_feedback": "Không thể phân tích cảm xúc lần này.",
+            "advice_text": "Hãy thử ghi âm lại với giọng rõ hơn.",
+            "extracted_mistakes": [],
+        })

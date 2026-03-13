@@ -2,7 +2,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -17,8 +17,8 @@ from app.models.lesson import (
 from app.schemas.lesson import (
     BossOut,
     ChapterOut,
-    LessonAttemptFeedbackCreate,
     LessonAttemptFeedbackOut,
+    LessonAttemptHistoryOut,
     LessonCompleteResponse,
     LessonOut,
     MarkLessonCompleteRequest,
@@ -163,45 +163,45 @@ async def evaluate_lesson_practice(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi máy chủ: {str(e)}")
 
-@router.post("/{lesson_id}/feedback", response_model=LessonAttemptFeedbackOut, status_code=201)
-async def submit_lesson_feedback(
-    lesson_id: uuid.UUID,
-    body: LessonAttemptFeedbackCreate,
+@router.get("/my-history", response_model=list[LessonAttemptHistoryOut])
+async def get_my_history(
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
-    """Save manual feedback for a lesson action attempt (Deprecated/Mock)."""
+    """Toàn bộ lịch sử luyện tập của user, kèm tên bài/chương, mới nhất trước."""
     uid = uuid.UUID(user_id)
-
-    # Count previous attempts to set attempt_number
-    count_result = await db.execute(
-        select(func.count(LessonAttemptFeedback.id)).where(
-            LessonAttemptFeedback.user_id == uid,
-            LessonAttemptFeedback.lesson_id == lesson_id,
+    result = await db.execute(
+        select(LessonAttemptFeedback, Lesson, Chapter)
+        .join(Lesson, LessonAttemptFeedback.lesson_id == Lesson.id)
+        .join(Chapter, Lesson.chapter_id == Chapter.id)
+        .where(LessonAttemptFeedback.user_id == uid)
+        .order_by(LessonAttemptFeedback.created_at.desc())
+    )
+    rows = result.all()
+    return [
+        LessonAttemptHistoryOut(
+            id=f.id,
+            lesson_id=f.lesson_id,
+            lesson_title=lesson.title,
+            chapter_title=chapter.title,
+            attempt_number=f.attempt_number,
+            stars=f.stars,
+            score=f.score,
+            content_score=f.content_score,
+            speed_score=f.speed_score,
+            emotion_score=f.emotion_score,
+            overall_score=f.overall_score,
+            transcript=f.transcript,
+            feedback_text=f.feedback_text,
+            content_feedback=f.content_feedback,
+            speed_feedback=f.speed_feedback,
+            emotion_feedback=f.emotion_feedback,
+            advice_text=f.advice_text,
+            filler_word_count=f.filler_word_count,
+            created_at=f.created_at.isoformat(),
         )
-    )
-    attempt_number = (count_result.scalar() or 0) + 1
-
-    feedback = LessonAttemptFeedback(
-        user_id=uid,
-        lesson_id=lesson_id,
-        attempt_number=attempt_number,
-        **body.model_dump(),
-    )
-    db.add(feedback)
-    await db.flush()
-    await db.refresh(feedback)
-    return LessonAttemptFeedbackOut(
-        id=feedback.id,
-        lesson_id=feedback.lesson_id,
-        attempt_number=feedback.attempt_number,
-        content_score=feedback.content_score,
-        speed_score=feedback.speed_score,
-        emotion_score=feedback.emotion_score,
-        overall_score=feedback.overall_score,
-        feedback_text=feedback.feedback_text,
-        created_at=feedback.created_at.isoformat(),
-    )
+        for f, lesson, chapter in rows
+    ]
 
 
 @router.get("/{lesson_id}/feedback", response_model=list[LessonAttemptFeedbackOut])
@@ -210,7 +210,7 @@ async def get_lesson_feedbacks(
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get all feedback attempts for a lesson by the current user."""
+    """Lịch sử các lần luyện tập của user cho một bài học (mới nhất trước)."""
     uid = uuid.UUID(user_id)
     result = await db.execute(
         select(LessonAttemptFeedback)
@@ -218,7 +218,7 @@ async def get_lesson_feedbacks(
             LessonAttemptFeedback.user_id == uid,
             LessonAttemptFeedback.lesson_id == lesson_id,
         )
-        .order_by(LessonAttemptFeedback.attempt_number)
+        .order_by(LessonAttemptFeedback.created_at.desc())
     )
     feedbacks = result.scalars().all()
     return [
@@ -226,11 +226,18 @@ async def get_lesson_feedbacks(
             id=f.id,
             lesson_id=f.lesson_id,
             attempt_number=f.attempt_number,
+            stars=f.stars,
+            score=f.score,
             content_score=f.content_score,
             speed_score=f.speed_score,
             emotion_score=f.emotion_score,
             overall_score=f.overall_score,
             feedback_text=f.feedback_text,
+            content_feedback=f.content_feedback,
+            speed_feedback=f.speed_feedback,
+            emotion_feedback=f.emotion_feedback,
+            advice_text=f.advice_text,
+            filler_word_count=f.filler_word_count,
             created_at=f.created_at.isoformat(),
         )
         for f in feedbacks

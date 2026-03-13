@@ -1,13 +1,13 @@
 import { useState, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import RichText from "@/components/RichText";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Play, RotateCcw, Mic, Star, Zap, User } from "lucide-react";
+import { ArrowLeft, Play, RotateCcw, Mic, Star, Zap, User, History } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { useProgress } from "@/hooks/useProgress";
 import { lessonService } from "@/services/lessonService";
 import { useAchievementToast } from "@/hooks/useAchievementToast";
 import { useUser } from "@/contexts/UserContext";
-import type { ExtractedMistake } from "@/types";
 
 const DEMO_SUBTITLE = "Xin chào, tôi là Minh. Rất vui được gặp bạn!";
 const DEMO_SUBTITLE_EN = "(Hello, I am Minh. Very nice to meet you!)";
@@ -24,11 +24,11 @@ const Practice = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [hasRecorded, setHasRecorded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [score, setScore] = useState({ content: 0, fluency: 0, emotion: 0, overall: 0 });
-  const [feedbackText, setFeedbackText] = useState("");
-  const [transcript, setTranscript] = useState("");
+  const [stars, setStars] = useState(0);
+  const [score, setScore] = useState(0);
+  const [scores, setScores] = useState({ content: 0, speed: 0, emotion: 0 });
   const [detailFeedback, setDetailFeedback] = useState({ content: "", speed: "", emotion: "", advice: "" });
-  const [mistakes, setMistakes] = useState<ExtractedMistake[]>([]);
+  const [transcript, setTranscript] = useState("");
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
@@ -71,21 +71,20 @@ const Practice = () => {
 
         try {
           const res = await lessonService.submitAudioPractice(lessonId, audioBlob);
-          setScore({
-            content: Math.round(res.content_score * 10),
-            fluency: Math.round(res.speed_score * 10),
-            emotion: Math.round(res.emotion_score * 10),
-            overall: Math.round((res.overall_score / 100) * 5), // map 0-100 to 0-5
+          setStars(res.stars ?? 0);
+          setScore(res.score ?? 0);
+          setScores({
+            content: Math.round((res.content_score ?? 0) * 10),
+            speed: Math.round((res.speed_score ?? 0) * 10),
+            emotion: Math.round((res.emotion_score ?? 0) * 10),
           });
-          setFeedbackText(res.feedback_text || "AI chưa trả về nhận xét chi tiết.");
-          setTranscript(res.transcript || "");
           setDetailFeedback({
             content: res.content_feedback || "",
             speed: res.speed_feedback || "",
             emotion: res.emotion_feedback || "",
-            advice: res.advice_text || "",
+            advice: res.advice_text || res.feedback_text || "",
           });
-          setMistakes(res.extracted_mistakes || []);
+          setTranscript(res.transcript || "");
           setHasRecorded(true);
         } catch (error: unknown) {
           console.error(error);
@@ -136,11 +135,11 @@ const Practice = () => {
   const handleRetry = () => {
     setHasRecorded(false);
     setIsRecording(false);
-    setScore({ content: 0, fluency: 0, emotion: 0, overall: 0 });
-    setFeedbackText("");
-    setTranscript("");
+    setStars(0);
+    setScore(0);
+    setScores({ content: 0, speed: 0, emotion: 0 });
     setDetailFeedback({ content: "", speed: "", emotion: "", advice: "" });
-    setMistakes([]);
+    setTranscript("");
     audioChunksRef.current = [];
   };
 
@@ -148,7 +147,7 @@ const Practice = () => {
     try {
       const lessonId: string | undefined = lesson?.id;
 
-      const stars = score.overall || 4;
+      const earnedStars = stars || 4;
 
       if (lessonId) {
         const res = await lessonService.completeLesson(lessonId, 100);
@@ -166,7 +165,7 @@ const Practice = () => {
 
       toast({
         title: "Hoàn thành bài học! 🎉",
-        description: `Bạn đạt ${stars} sao! Quay lại bản đồ để tiếp tục.`,
+        description: `Bạn đạt ${earnedStars} sao! Quay lại bản đồ để tiếp tục.`,
       });
       navigate("/roadmap");
     } catch (error) {
@@ -193,16 +192,19 @@ const Practice = () => {
           <h1 className="text-xl font-black uppercase tracking-tighter">Talki Map</h1>
         </button>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          {/* Lịch sử */}
+          <button
+            onClick={() => navigate("/history")}
+            className="flex items-center gap-1.5 bg-muted neo-border neo-shadow-sm px-3 py-1 hover:opacity-80 transition-opacity"
+          >
+            <History className="w-4 h-4" />
+            <span className="hidden sm:inline font-black text-xs uppercase tracking-wide">Lịch sử</span>
+          </button>
           {/* Energy */}
           <div className="flex items-center gap-1.5 bg-yellow-400 neo-border neo-shadow-sm px-3 py-1">
             <Zap className="w-4 h-4 fill-black text-black" />
             <span className="font-black text-sm text-black">{hearts}/20</span>
-          </div>
-          {/* Points (mock) */}
-          <div className="hidden sm:flex items-center gap-1.5 bg-primary neo-border neo-shadow-sm px-3 py-1">
-            <Star className="w-4 h-4 fill-white text-white" />
-            <span className="font-black text-sm text-white">1,240</span>
           </div>
           {/* Avatar */}
           <button
@@ -385,20 +387,15 @@ const Practice = () => {
               /* Locked state */
               <div className="flex flex-col items-center gap-4 py-4">
                 <div className="grid grid-cols-3 gap-4 w-full mb-2">
-                  {["Content Score", "Fluency", "Emotion / Tone"].map((label) => (
+                  {["Nội dung", "Trôi chảy", "Cảm xúc"].map((label) => (
                     <div key={label} className="flex flex-col items-center gap-1">
-                      <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">
-                        {label}
-                      </span>
+                      <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">{label}</span>
                       <div className="w-full h-2 bg-muted neo-border rounded-full" />
                       <span className="text-lg font-black text-muted-foreground">—</span>
                     </div>
                   ))}
                 </div>
-                <button
-                  disabled
-                  className="px-6 py-2 bg-muted text-muted-foreground font-black uppercase tracking-widest text-xs neo-border rounded-sm cursor-not-allowed"
-                >
+                <button disabled className="px-6 py-2 bg-muted text-muted-foreground font-black uppercase tracking-widest text-xs neo-border rounded-sm cursor-not-allowed">
                   Complete Step 2 to View
                 </button>
                 <div className="flex gap-2 mt-1">
@@ -410,16 +407,15 @@ const Practice = () => {
             ) : (
               /* Revealed state */
               <div className="flex flex-col gap-5">
+                {/* 3 score bars */}
                 <div className="grid grid-cols-3 gap-4">
                   {[
-                    { label: "Content Score", value: score.content },
-                    { label: "Fluency", value: score.fluency },
-                    { label: "Emotion / Tone", value: score.emotion },
+                    { label: "Nội dung", value: scores.content },
+                    { label: "Trôi chảy", value: scores.speed },
+                    { label: "Cảm xúc", value: scores.emotion },
                   ].map(({ label, value }) => (
                     <div key={label} className="flex flex-col items-center gap-2">
-                      <span className="text-xs font-black uppercase tracking-widest text-muted-foreground text-center">
-                        {label}
-                      </span>
+                      <span className="text-xs font-black uppercase tracking-widest text-muted-foreground text-center">{label}</span>
                       <div className="w-full h-2 bg-muted neo-border rounded-full overflow-hidden">
                         <div className="h-full bg-primary transition-all duration-700" style={{ width: `${value}%` }} />
                       </div>
@@ -428,70 +424,52 @@ const Practice = () => {
                   ))}
                 </div>
 
-                {/* Overall stars */}
-                <div className="flex justify-center gap-2">
-                  {[...Array(5)].map((_, i) => (
-                    <Star
-                      key={i}
-                      className={`w-7 h-7 ${i < score.overall ? "text-primary fill-primary" : "text-muted-foreground"}`}
-                    />
-                  ))}
+                {/* Overall stars + score */}
+                <div className="flex items-center justify-between">
+                  <div className="flex gap-1.5">
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} className={`w-6 h-6 ${i < stars ? "text-yellow-400 fill-yellow-400" : "text-muted-foreground"}`} />
+                    ))}
+                  </div>
+                  <span className="text-2xl font-black text-foreground">{score}<span className="text-sm font-bold text-muted-foreground">/100</span></span>
                 </div>
 
-                {/* AI feedback text */}
-                <div className="bg-secondary/10 neo-border rounded-sm p-4">
-                  <p className="font-bold text-foreground text-sm leading-relaxed whitespace-pre-line">
-                    💬 <strong>Nhận xét:</strong> {feedbackText}
-                  </p>
-                </div>
-
+                {/* 3 feedback texts */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   {[
-                    { title: "Nội dung", value: detailFeedback.content },
-                    { title: "Độ trôi chảy", value: detailFeedback.speed },
-                    { title: "Cảm xúc", value: detailFeedback.emotion },
+                    { title: "📝 Nội dung", value: detailFeedback.content },
+                    { title: "⚡ Trôi chảy", value: detailFeedback.speed },
+                    { title: "💬 Cảm xúc", value: detailFeedback.emotion },
                   ].map((item) => (
                     <div key={item.title} className="bg-muted/30 neo-border rounded-sm p-4">
                       <p className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-2">{item.title}</p>
-                      <p className="font-medium text-sm text-foreground leading-relaxed whitespace-pre-line">
-                        {item.value || "AI chưa trả về nhận xét cho mục này."}
+                      <p className="text-sm text-foreground leading-relaxed">
+                        {item.value
+                          ? <RichText text={item.value} />
+                          : <span className="text-muted-foreground italic">AI chưa có nhận xét.</span>
+                        }
                       </p>
                     </div>
                   ))}
                 </div>
 
-                {transcript && (
-                  <div className="bg-muted/40 neo-border rounded-sm p-4">
-                    <p className="font-bold text-foreground text-sm leading-relaxed whitespace-pre-line">
-                      🎙️ <strong>AI nghe được:</strong> {transcript}
-                    </p>
-                  </div>
-                )}
-
                 {detailFeedback.advice && (
                   <div className="bg-primary/10 neo-border rounded-sm p-4">
-                    <p className="font-bold text-foreground text-sm leading-relaxed whitespace-pre-line">
-                      🎯 <strong>Gợi ý cải thiện:</strong> {detailFeedback.advice}
+                    <p className="text-sm text-foreground leading-relaxed">
+                      🎯 <strong className="font-black">Gợi ý:</strong>{" "}
+                      <RichText text={detailFeedback.advice} />
                     </p>
                   </div>
                 )}
 
-                {mistakes.length > 0 && (
-                  <div className="bg-card neo-border rounded-sm p-4">
-                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-3">AI phát hiện điểm cần sửa</p>
-                    <div className="space-y-3">
-                      {mistakes.map((mistake, index) => (
-                        <div key={`${mistake.word_or_phrase}-${index}`} className="border-l-4 border-primary pl-3">
-                          <p className="font-bold text-sm text-foreground">{mistake.word_or_phrase}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {mistake.type ? `Loại lỗi: ${mistake.type}` : "AI chưa phân loại lỗi."}
-                          </p>
-                          {mistake.correction && (
-                            <p className="text-sm text-foreground">Gợi ý sửa: {mistake.correction}</p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                {transcript && (
+                  <div className="bg-muted/40 neo-border rounded-sm p-4">
+                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-2">
+                      🎙️ Bạn đã nói
+                    </p>
+                    <p className="text-sm text-foreground leading-relaxed italic border-l-2 border-primary pl-3">
+                      "{transcript}"
+                    </p>
                   </div>
                 )}
 

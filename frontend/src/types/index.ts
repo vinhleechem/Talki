@@ -204,25 +204,41 @@ export interface LessonAttemptFeedback {
   id: string;
   lesson_id: string;
   attempt_number: number;
+  stars: number;
+  score: number;
   content_score: number;
   speed_score: number;
   emotion_score: number;
   overall_score: number;
   feedback_text: string | null;
-  content_feedback?: string | null;
-  speed_feedback?: string | null;
-  emotion_feedback?: string | null;
-  advice_text?: string | null;
-  filler_word_count?: number;
-  extracted_mistakes?: ExtractedMistake[];
-  transcript?: string | null;
+  content_feedback: string | null;
+  speed_feedback: string | null;
+  emotion_feedback: string | null;
+  advice_text: string | null;
+  filler_word_count: number;
+  extracted_mistakes: ExtractedMistake[];
+  transcript: string | null;
   created_at: string;
 }
 
-export interface LessonAttemptFeedbackCreate {
+export interface LessonAttemptHistoryItem {
+  id: string;
+  lesson_id: string;
+  lesson_title: string;
+  chapter_title: string;
+  attempt_number: number;
+  stars: number;
+  score: number;
   content_score: number;
   speed_score: number;
   emotion_score: number;
   overall_score: number;
-  feedback_text?: string | null;
+  transcript: string | null;
+  feedback_text: string | null;
+  content_feedback: string | null;
+  speed_feedback: string | null;
+  emotion_feedback: string | null;
+  advice_text: string | null;
+  filler_word_count: number;
+  created_at: string;
 }

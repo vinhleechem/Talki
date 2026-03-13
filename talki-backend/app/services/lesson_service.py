@@ -49,7 +49,7 @@ async def evaluate_practice(
 
     content_score = float(raw_feedback.get("content_score", 0))
     speed_score = float(raw_feedback.get("fluency_score", 0))
-    emotion_score = float(raw_feedback.get("confidence_score", 0)) # using confidence as emotion/tone
+    emotion_score = float(raw_feedback.get("confidence_score", 0))
     overall_score = float(raw_feedback.get("overall_score", 0))
     feedback_text = raw_feedback.get("feedback_text", "")
     content_feedback = raw_feedback.get("content_feedback", "")
@@ -59,7 +59,9 @@ async def evaluate_practice(
     filler_word_count = int(raw_feedback.get("total_filler_words", 0))
     extracted_mistakes = raw_feedback.get("extracted_mistakes", [])
 
-    # Count previous attempts to set attempt_number
+    overall_stars = min(5, max(0, int(overall_score / 20)))
+
+    # Count previous attempts
     count_result = await db.execute(
         select(func.count(LessonAttemptFeedback.id)).where(
             LessonAttemptFeedback.user_id == user_id,
@@ -69,21 +71,18 @@ async def evaluate_practice(
     attempt_number = (count_result.scalar() or 0) + 1
 
     # Save Feedback
-    overall_stars = min(5, max(0, int(overall_score / 20)))
     feedback = LessonAttemptFeedback(
         user_id=user_id,
         lesson_id=lesson_id,
         attempt_number=attempt_number,
-        # Numeric score columns (added via migration 20260313000000)
+        stars=overall_stars,
+        score=int(overall_score),
         content_score=content_score,
         speed_score=speed_score,
         emotion_score=emotion_score,
         overall_score=overall_score,
         feedback_text=feedback_text,
-        # Original DB columns
         transcript=user_text,
-        stars=overall_stars,
-        score=int(overall_score),
         content_feedback=content_feedback,
         speed_feedback=speed_feedback,
         emotion_feedback=emotion_feedback,
@@ -170,6 +169,8 @@ async def evaluate_practice(
         id=feedback.id,
         lesson_id=feedback.lesson_id,
         attempt_number=feedback.attempt_number,
+        stars=feedback.stars,
+        score=feedback.score,
         content_score=feedback.content_score,
         speed_score=feedback.speed_score,
         emotion_score=feedback.emotion_score,
