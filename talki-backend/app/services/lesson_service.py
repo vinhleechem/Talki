@@ -9,6 +9,7 @@ from app.models.lesson import Lesson, LessonAttemptFeedback, UserLessonProgress
 from app.models.conversation import UserMistake
 from app.schemas.lesson import LessonAttemptFeedbackOut
 from app.services import ai_service, stt_service, heart_service, achievement_service
+from app.services import supabase_storage
 
 
 async def evaluate_practice(
@@ -76,7 +77,6 @@ async def evaluate_practice(
         lesson_id=lesson_id,
         attempt_number=attempt_number,
         stars=overall_stars,
-        score=int(overall_score),
         content_score=content_score,
         speed_score=speed_score,
         emotion_score=emotion_score,
@@ -90,6 +90,15 @@ async def evaluate_practice(
         filler_word_count=filler_word_count,
     )
     db.add(feedback)
+    await db.flush()
+
+    # Upload audio lên Supabase Storage (lưu 3 ngày), gán audio_url
+    audio_url = await supabase_storage.upload_audio(
+        audio_bytes, "practice", user_id, feedback.id, content_type="audio/webm"
+    )
+    if audio_url:
+        feedback.audio_url = audio_url
+        await db.flush() # Lưu URL ngay lập tức
 
     # Process extracted mistakes
     for mistake in extracted_mistakes:
@@ -145,6 +154,7 @@ async def evaluate_practice(
             best_score=int(overall_score),
             completed=(overall_score >= 60),
             transcript=user_text,
+            audio_url=feedback.audio_url,
             completed_at=datetime.now(timezone.utc) if overall_score >= 60 else None,
         )
         db.add(progress)
@@ -154,10 +164,16 @@ async def evaluate_practice(
         if int(overall_score) > progress.best_score:
             progress.best_score = int(overall_score)
             progress.stars = overall_stars
+            progress.audio_url = feedback.audio_url  # Update audio if it's the best score
 
         if not progress.completed and overall_score >= 60:
             progress.completed = True
             progress.completed_at = datetime.now(timezone.utc)
+            if progress.stars < 3:
+                progress.stars = overall_stars
+            # Đảm bảo audio_url cũng được cập nhật nếu bài học mới hoàn thành
+            if feedback.audio_url:
+                progress.audio_url = feedback.audio_url
 
     await db.flush()
 
@@ -170,11 +186,12 @@ async def evaluate_practice(
         lesson_id=feedback.lesson_id,
         attempt_number=feedback.attempt_number,
         stars=feedback.stars,
-        score=feedback.score,
+        score=round(feedback.overall_score),
         content_score=feedback.content_score,
         speed_score=feedback.speed_score,
         emotion_score=feedback.emotion_score,
         overall_score=feedback.overall_score,
+        audio_url=feedback.audio_url,
         feedback_text=feedback.feedback_text,
         content_feedback=feedback.content_feedback,
         speed_feedback=feedback.speed_feedback,

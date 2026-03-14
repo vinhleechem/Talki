@@ -173,6 +173,7 @@ async def generate_feedback(
         '  "extracted_mistakes": [{"word_or_phrase": "...", "type": "...", "correction": "..."}]\n'
         "}\n"
         "Trong đó 'type' của mistake phải là một trong các giá trị: 'grammar', 'vocabulary', 'pronunciation', 'filler'.\n"
+        "- ĐÂY LÀ BÀI LUYỆN NÓI (SPEAKING). Transcript được tạo từ Speech-to-Text nên có thể thiếu dấu câu hoặc viết hoa. TUYỆT ĐỐI KHÔNG nhận xét về lỗi dấu câu, chấm phẩy hay viết hoa.\n"
         "Chỉ trả về JSON, không thêm markdown hay giải thích."
     )
     response = await _get_client().aio.models.generate_content(
@@ -212,6 +213,7 @@ async def evaluate_lesson_practice(
         "- Dùng **từ hoặc cụm từ** (hai dấu sao) để IN ĐẬM những điểm quan trọng nhất.\n"
         "- Dùng *từ hoặc cụm từ* (một dấu sao) để IN NGHIÊNG những ví dụ hoặc từ cần lưu ý.\n"
         "- Mỗi trường feedback nên có ít nhất 1-2 đoạn in đậm/in nghiêng.\n"
+        "- ĐÂY LÀ BÀI LUYỆN NÓI (SPEAKING). Transcript được tạo từ Speech-to-Text nên có thể thiếu dấu câu hoặc viết hoa. TUYỆT ĐỐI KHÔNG nhận xét hay bắt lỗi về dấu câu, chấm phẩy hay viết hoa. Tập trung vào nội dung, từ vựng và sự trôi chảy.\n"
         "Trong đó 'type' của mistake phải là một trong: 'grammar', 'vocabulary', 'pronunciation', 'filler'.\n"
         "Chỉ trả về JSON, không bọc trong markdown code fence."
     )

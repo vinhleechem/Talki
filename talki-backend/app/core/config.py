@@ -28,6 +28,12 @@ class Settings(BaseSettings):
     PAYOS_API_KEY: str = ""
     PAYOS_CHECKSUM_KEY: str = ""
 
+    # Cloudinary (media hosting for lesson videos)
+    CLOUDINARY_CLOUD_NAME: str = ""
+    CLOUDINARY_API_KEY: str = ""
+    CLOUDINARY_API_SECRET: str = ""
+    CLOUDINARY_UPLOAD_FOLDER: str = "talki-lessons"
+
     # Hearts system
     FREE_HEARTS_PER_DAY: int = 3
     HEART_REGEN_HOURS: int = 8  # 1 heart every N hours

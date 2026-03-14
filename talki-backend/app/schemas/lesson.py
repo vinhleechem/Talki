@@ -67,6 +67,7 @@ class LessonAttemptFeedbackOut(BaseModel):
     speed_score: float
     emotion_score: float
     overall_score: float
+    audio_url: str | None = None
     feedback_text: str | None = None
     content_feedback: str | None = None
     speed_feedback: str | None = None
@@ -93,6 +94,7 @@ class LessonAttemptHistoryOut(BaseModel):
     speed_score: float
     emotion_score: float
     overall_score: float
+    audio_url: str | None = None
     transcript: str | None = None
     feedback_text: str | None = None
     content_feedback: str | None = None

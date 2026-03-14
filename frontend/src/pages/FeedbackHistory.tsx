@@ -99,14 +99,25 @@ function AttemptCard({ item }: { item: LessonAttemptHistoryItem }) {
       {open && (
         <div className="border-t neo-border-t px-4 py-4 space-y-4 bg-muted/20">
           {/* What user said */}
-          {item.transcript && (
-            <div>
-              <p className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-1">
+          {(item.audio_url || item.transcript) && (
+            <div className="space-y-2">
+              <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">
                 🎙️ Bạn đã nói
               </p>
-              <p className="text-sm text-foreground leading-relaxed italic border-l-2 border-primary pl-3">
-                "{item.transcript}"
-              </p>
+              {item.audio_url && (
+                <audio
+                  controls
+                  src={item.audio_url}
+                  className="w-full h-10 rounded"
+                  style={{ accentColor: "var(--primary)" }}
+                  onError={(e) => { (e.currentTarget as HTMLAudioElement).style.display = "none"; }}
+                />
+              )}
+              {item.transcript && (
+                <p className="text-sm text-foreground leading-relaxed italic border-l-2 border-primary pl-3">
+                  "{item.transcript}"
+                </p>
+              )}
             </div>
           )}
 

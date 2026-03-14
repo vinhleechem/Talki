@@ -121,7 +121,7 @@ class LessonAttemptFeedback(Base):
     audio_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     transcript: Mapped[str | None] = mapped_column(Text, nullable=True)
     stars: Mapped[int] = mapped_column(Integer, default=0)           # 0-5
-    score: Mapped[int] = mapped_column(Integer, default=0)           # 0-100
+    # score đã bỏ, chỉ dùng overall_score (0-100); API trả score = round(overall_score)
     content_feedback: Mapped[str | None] = mapped_column(Text, nullable=True)
     speed_feedback: Mapped[str | None] = mapped_column(Text, nullable=True)
     emotion_feedback: Mapped[str | None] = mapped_column(Text, nullable=True)

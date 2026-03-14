@@ -23,6 +23,7 @@ class SpeakResponse(BaseModel):
     filler_word_count: int
     ai_reply_text: str
     ai_audio_url: str
+    user_audio_url: str | None = None
     is_last_turn: bool
 
 

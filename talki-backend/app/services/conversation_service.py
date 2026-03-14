@@ -20,7 +20,7 @@ from app.schemas.conversation import (
     StartConversationResponse,
     TurnFeedback,
 )
-from app.services import ai_service, stt_service, tts_service, achievement_service
+from app.services import ai_service, stt_service, tts_service, achievement_service, supabase_storage
 from app.utils.text_analysis import count_filler_words, total_filler_count
 
 
@@ -101,6 +101,14 @@ async def process_speak_turn(
         ai_audio_url=ai_audio_url,
     )
     db.add(turn)
+    await db.flush()
+
+    # Upload user audio
+    user_audio_url = await supabase_storage.upload_audio(
+        audio_bytes, "boss", convo.user_id, turn.id, content_type="audio/webm"
+    )
+    if user_audio_url:
+        turn.user_audio_url = user_audio_url
 
     is_last = should_end or (turn_index + 1 >= boss.max_turns)
     if is_last:
@@ -115,6 +123,7 @@ async def process_speak_turn(
         filler_word_count=fillers,
         ai_reply_text=ai_text,
         ai_audio_url=ai_audio_url,
+        user_audio_url=turn.user_audio_url,
         is_last_turn=is_last,
     )
 

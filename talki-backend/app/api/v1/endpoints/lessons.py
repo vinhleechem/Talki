@@ -48,12 +48,14 @@ async def list_chapters(
         )
         lessons = ls_result.scalars().all()
 
-        # Completed lesson IDs for this user (stars >= 3 = completed)
+        # Bài đạt >= 3 sao ↔ completed=True (vì completed chỉ được set khi score >= 60 = 3 sao)
+        # Dùng best_score >= 60 thay vì stars >= 3 để tránh lỗi data cũ có stars=0
         done_result = await db.execute(
             select(UserLessonProgress.lesson_id).where(
                 UserLessonProgress.user_id == uid,
                 UserLessonProgress.lesson_id.in_([l.id for l in lessons]),
                 UserLessonProgress.completed == True,
+                UserLessonProgress.best_score >= 60,
             )
         )
         done_ids = set(done_result.scalars().all())
@@ -186,11 +188,12 @@ async def get_my_history(
             chapter_title=chapter.title,
             attempt_number=f.attempt_number,
             stars=f.stars,
-            score=f.score,
+            score=round(f.overall_score),
             content_score=f.content_score,
             speed_score=f.speed_score,
             emotion_score=f.emotion_score,
             overall_score=f.overall_score,
+            audio_url=f.audio_url,
             transcript=f.transcript,
             feedback_text=f.feedback_text,
             content_feedback=f.content_feedback,
@@ -227,11 +230,12 @@ async def get_lesson_feedbacks(
             lesson_id=f.lesson_id,
             attempt_number=f.attempt_number,
             stars=f.stars,
-            score=f.score,
+            score=round(f.overall_score),
             content_score=f.content_score,
             speed_score=f.speed_score,
             emotion_score=f.emotion_score,
             overall_score=f.overall_score,
+            audio_url=f.audio_url,
             feedback_text=f.feedback_text,
             content_feedback=f.content_feedback,
             speed_feedback=f.speed_feedback,
