@@ -41,7 +41,7 @@ function StarRow({ stars }: { stars: number }) {
 
 /* ─── attempt card ─────────────────────────────────────────── */
 
-function AttemptCard({ item }: { item: LessonAttemptHistoryItem }) {
+function AttemptCard({ item, displayNumber }: { item: LessonAttemptHistoryItem; displayNumber: number }) {
   const [open, setOpen] = useState(false);
   const hasFeedback = item.content_feedback || item.speed_feedback || item.emotion_feedback || item.advice_text;
 
@@ -58,7 +58,7 @@ function AttemptCard({ item }: { item: LessonAttemptHistoryItem }) {
       >
         {/* Attempt badge */}
         <div className="w-8 h-8 bg-foreground text-background flex items-center justify-center font-black text-xs neo-border flex-shrink-0">
-          #{item.attempt_number}
+          #{displayNumber}
         </div>
 
         <div className="flex-1 min-w-0">
@@ -282,8 +282,8 @@ const FeedbackHistory = () => {
         {/* List */}
         {!loading && !error && items.length > 0 && (
           <div className="space-y-3">
-            {items.map((item) => (
-              <AttemptCard key={item.id} item={item} />
+            {items.map((item, index) => (
+              <AttemptCard key={item.id} item={item} displayNumber={items.length - index} />
             ))}
           </div>
         )}

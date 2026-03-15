@@ -21,6 +21,14 @@ def _get_client() -> genai.Client:
     return genai.Client(api_key=settings.GEMINI_API_KEY)
 
 
+def _normalize_mime_type(mime_type: str) -> str:
+    """
+    Gemini API chỉ chấp nhận base MIME type, không có params.
+    Ví dụ: 'audio/webm;codecs=opus' → 'audio/webm'
+    """
+    return mime_type.split(";")[0].strip() if mime_type else "audio/webm"
+
+
 def _extract_json(raw: str) -> str:
     """Strip code fences then find the first {...} JSON object in the text."""
     text = raw.strip()
@@ -86,6 +94,7 @@ def _normalize_practice_feedback(payload: dict) -> dict:
         "speed_feedback": str(payload.get("speed_feedback", "")).strip(),
         "emotion_feedback": str(payload.get("emotion_feedback", "")).strip(),
         "advice_text": str(payload.get("advice_text", "")).strip(),
+        "transcript": str(payload.get("transcript", "")).strip(),
         "extracted_mistakes": normalized_mistakes,
     }
 
@@ -104,46 +113,51 @@ def _build_system_prompt(persona_prompt: str) -> str:
 async def chat_turn(
     persona_prompt: str,
     history: list[dict],
-    user_text: str,
-) -> tuple[str, bool]:
+    audio_bytes: bytes,
+) -> tuple[str, str, bool]:
     """
-    Send one user turn to Gemini.
-    Returns (ai_reply_text, should_end_session).
-    should_end_session=True when guardrail triggers second violation.
+    Send one user audio turn to Gemini.
+    Returns (transcript, ai_reply_text, should_end_session).
     """
-    # Guardrail check
-    violation_count = sum(
-        1 for turn in history if turn.get("role") == "user"
-        and any(kw in turn.get("parts", [""])[0].lower() for kw in GUARDRAIL_KEYWORDS)
-    )
-    if any(kw in user_text.lower() for kw in GUARDRAIL_KEYWORDS):
-        if violation_count >= 1:
-            return "Phiên luyện tập bị kết thúc do vi phạm quy tắc.", True
-        return (
-            "⚠️ Cảnh báo: Vui lòng giữ thái độ chuyên nghiệp. "
-            "Lần sau vi phạm phiên sẽ bị kết thúc.",
-            False,
-        )
-
-    user_content = user_text
-    if is_too_short(user_text):
-        user_content = user_text + FOLLOW_UP_SUFFIX
-
-    # Build contents from history + new user message
     contents = []
+    # Add persona as system instruction or first user message if needed
+    # (Simplified: pre-pend to first message as hidden context if history empty)
+    
     for turn in history:
         role = "user" if turn.get("role") == "user" else "model"
         contents.append(types.Content(role=role, parts=[types.Part(text=turn.get("parts", [""])[0])]))
-    contents.append(types.Content(role="user", parts=[types.Part(text=user_content)]))
+    
+    # Add new user audio turn
+    clean_mime = _normalize_mime_type("audio/webm")
+    prompt = (
+        f"{_build_system_prompt(persona_prompt)}\n\n"
+        "Hãy phản hồi lại người dùng dựa trên audio họ gửi. "
+        "PHẢI trả về JSON theo cấu trúc:\n"
+        '{\n'
+        '  "transcript": "<Văn bản bạn nghe được từ audio>",\n'
+        '  "reply": "<Câu trả lời của bạn cho người dùng>",\n'
+        '  "should_end": <true/false nếu hội thoại nên kết thúc>\n'
+        '}'
+    )
+    contents.append(types.Content(role="user", parts=[
+        types.Part(inline_data=types.Blob(data=audio_bytes, mime_type=clean_mime)),
+        types.Part(text=prompt)
+    ]))
 
     response = await _get_client().aio.models.generate_content(
         model=settings.GEMINI_MODEL,
         contents=contents,
         config=types.GenerateContentConfig(
-            system_instruction=_build_system_prompt(persona_prompt),
+            response_mime_type="application/json",
         ),
     )
-    return response.text, False
+    
+    res_json = _parse_json_response(response.text or "", "lượt chat")
+    transcript = res_json.get("transcript", "")
+    ai_text = res_json.get("reply", "...")
+    should_end = res_json.get("should_end", False)
+
+    return transcript, ai_text, should_end
 
 
 async def generate_feedback(
@@ -185,41 +199,52 @@ async def generate_feedback(
 
 async def evaluate_lesson_practice(
     action_prompt: str,
-    user_text: str,
+    audio_bytes: bytes,
+    mime_type: str = "audio/webm",
 ) -> dict:
     """
-    Evaluate a single user utterance against a lesson's action prompt.
-    Returns dict with keys: fluency_score, confidence_score (emotion/tone), content_score,
-    overall_score, total_filler_words, feedback_text, extracted_mistakes.
+    Evaluate a single user utterance against a lesson's action prompt directly from audio.
+    Multimodal approach: No separate STT needed.
     """
     prompt = (
         f"Tình huống (Mục tiêu giao tiếp): {action_prompt}\n\n"
-        f"Câu trả lời của học viên:\n\"{user_text}\"\n\n"
-        "Hãy đánh giá phần thực hành của học viên và trả về JSON với cấu trúc sau:\n"
+        "Hãy đóng vai GIÁM KHẢO, đánh giá phần thực hành của học viên qua audio và trả về JSON với cấu trúc sau:\n"
         "{\n"
         '  "fluency_score": <0-10>,\n'
-        '  "confidence_score": <0-10>,\n'  # Use this for emotion/tone score
+        '  "confidence_score": <0-10>,\n'
         '  "content_score": <0-10>,\n'
-        '  "overall_score": <0-100>,\n'  # Based on 100 max
+        '  "overall_score": <0-100>,\n'
         '  "total_filler_words": <số nguyên>,\n'
-        '  "feedback_text": "<nhận xét tổng quan>",\n'
-        '  "content_feedback": "<nhận xét về nội dung – dùng **từ khoá quan trọng** để in đậm, *cụm từ cần chú ý* để in nghiêng>",\n'
-        '  "speed_feedback": "<nhận xét về độ trôi chảy/tốc độ – dùng **từ khoá quan trọng** và *cụm từ nhấn mạnh*>",\n'
-        '  "emotion_feedback": "<nhận xét về cảm xúc/tông giọng – dùng **từ khoá quan trọng** và *cụm từ nhấn mạnh*>",\n'
-        '  "advice_text": "<lời khuyên cụ thể – dùng **hành động cần làm** và *ví dụ minh hoạ* bằng in đậm/in nghiêng>",\n'
+        '  "transcript": "<Văn bản bạn nghe được từ audio>",\n'
+        '  "feedback_text": "<nhận xét tổng quan ngắn gọn>",\n'
+        '  "content_feedback": "<nhận xét về nội dung – dùng **từ khoá** để in đậm, *cụm từ* để in nghiêng. Đánh giá xem có bám sát ngữ cảnh không>",\n'
+        '  "speed_feedback": "<nhận xét về tốc độ & sự ngập ngừng (hesitation) – dùng **từ khoá** và *cụm từ nhấn mạnh*>",\n'
+        '  "emotion_feedback": "<nhận xét về cảm xúc & cường độ giọng nói (intensity) – dùng **từ khoá** và *cụm từ nhấn mạnh*>",\n'
+        '  "advice_text": "<lời khuyên cụ thể – dùng **hành động** và *ví dụ* bằng in đậm/in nghiêng>",\n'
         '  "extracted_mistakes": [{"word_or_phrase": "...", "type": "...", "correction": "..."}]\n'
         "}\n"
-        "QUY TẮC ĐỊNH DẠNG TEXT:\n"
-        "- Dùng **từ hoặc cụm từ** (hai dấu sao) để IN ĐẬM những điểm quan trọng nhất.\n"
-        "- Dùng *từ hoặc cụm từ* (một dấu sao) để IN NGHIÊNG những ví dụ hoặc từ cần lưu ý.\n"
-        "- Mỗi trường feedback nên có ít nhất 1-2 đoạn in đậm/in nghiêng.\n"
-        "- ĐÂY LÀ BÀI LUYỆN NÓI (SPEAKING). Transcript được tạo từ Speech-to-Text nên có thể thiếu dấu câu hoặc viết hoa. TUYỆT ĐỐI KHÔNG nhận xét hay bắt lỗi về dấu câu, chấm phẩy hay viết hoa. Tập trung vào nội dung, từ vựng và sự trôi chảy.\n"
-        "Trong đó 'type' của mistake phải là một trong: 'grammar', 'vocabulary', 'pronunciation', 'filler'.\n"
-        "Chỉ trả về JSON, không bọc trong markdown code fence."
+        "QUY TẮC PHÂN TÍCH AUDIO:\n"
+        "- Bạn sẽ nhận được file audio của học viên.\n"
+        "- Đánh giá độ trôi chảy (fluency) dựa trên tốc độ, sự NGẬP NGỪNG (quãng nghỉ không tự nhiên) và các từ thừa (filler words).\n"
+        "- Đánh giá tông giọng & năng lượng (confidence/emotion) dựa trên CƯỜNG ĐỘ giọng nói, sự tự tin và sắc thái biểu cảm.\n"
+        "- So sánh nội dung học viên nói với 'Tình huống (Mục tiêu giao tiếp)' ở trên xem có bám sát và hợp lý không.\n"
+        "QUY TẮC ĐỊNH DẠNG:\n"
+        "- Trả về JSON thuần, KHÔNG bọc trong markdown code fence, KHÔNG có văn bản thừa.\n"
+        "- Dùng **từ** (hai dấu sao) để in đậm, *từ* (một dấu sao) để in nghiêng.\n"
+        "- TUYỆT ĐỐI KHÔNG bắt lỗi dấu câu hay viết hoa vì đây là bài luyện nói.\n"
+        "Trong đó 'type' của mistake phải là một trong: 'grammar', 'vocabulary', 'pronunciation', 'filler'."
     )
     response = await _get_client().aio.models.generate_content(
         model=settings.GEMINI_MODEL,
-        contents=[types.Content(role="user", parts=[types.Part(text=prompt)])],
+        contents=[
+            types.Content(
+                role="user",
+                parts=[
+                    types.Part(inline_data=types.Blob(data=audio_bytes, mime_type=_normalize_mime_type(mime_type))),
+                    types.Part(text=prompt),
+                ],
+            )
+        ],
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
         ),
@@ -239,5 +264,6 @@ async def evaluate_lesson_practice(
             "speed_feedback": "Không thể phân tích tốc độ lần này.",
             "emotion_feedback": "Không thể phân tích cảm xúc lần này.",
             "advice_text": "Hãy thử ghi âm lại với giọng rõ hơn.",
+            "transcript": "",
             "extracted_mistakes": [],
         })

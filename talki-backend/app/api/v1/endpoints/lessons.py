@@ -50,18 +50,19 @@ async def list_chapters(
 
         # Bài đạt >= 3 sao ↔ completed=True (vì completed chỉ được set khi score >= 60 = 3 sao)
         # Dùng best_score >= 60 thay vì stars >= 3 để tránh lỗi data cũ có stars=0
+        # FIX: Chỉ dùng best_score >= 60 là điều kiện chính
+        # (nếu completed=False nhưng best_score>=60 = data cũ → vẫn tính là hoàn thành)
         done_result = await db.execute(
             select(UserLessonProgress.lesson_id).where(
                 UserLessonProgress.user_id == uid,
                 UserLessonProgress.lesson_id.in_([l.id for l in lessons]),
-                UserLessonProgress.completed == True,
                 UserLessonProgress.best_score >= 60,
             )
         )
         done_ids = set(done_result.scalars().all())
         total = len(lessons)
         done = len(done_ids)
-        progress_pct = (done / total * 100) if total else 0.0
+        progress_pct = (done / total * 100) if total else 100.0
 
         lessons_out = [
             LessonOut(
@@ -126,8 +127,15 @@ async def mark_lesson_complete(
             UserLessonProgress.lesson_id == lesson_id,
         )
     )
+    progress = existing.scalar_one_or_none()
     newly_unlocked: list[str] = []
-    if existing.scalar_one_or_none() is None:
+    
+    if progress:
+        # Cập nhật nếu đã có (ví dụ đã tập nói trước khi xem xong video)
+        progress.watched = True
+        progress.watch_percent = max(progress.watch_percent, body.watch_percent)
+    else:
+        # Tạo mới nếu chưa có gì
         progress = UserLessonProgress(
             user_id=uid,
             lesson_id=lesson_id,
@@ -135,14 +143,15 @@ async def mark_lesson_complete(
             watch_percent=body.watch_percent,
         )
         db.add(progress)
-        await db.flush()
-        newly_unlocked = await achievement_service.check_and_award_achievements(db, uid)
+    
+    await db.flush()
+    newly_unlocked = await achievement_service.check_and_award_achievements(db, uid)
     return LessonCompleteResponse(newly_unlocked_achievements=newly_unlocked)
 
 
 
-@router.post("/{lesson_id}/practice", response_model=LessonAttemptFeedbackOut, status_code=201)
-async def evaluate_lesson_practice(
+@router.post("/{lesson_id}/submit", response_model=LessonAttemptFeedbackOut, status_code=201)
+async def submit_lesson_practice(
     lesson_id: uuid.UUID,
     audio: UploadFile = File(..., description="WebM/Opus audio from microphone"),
     user_id: str = Depends(get_current_user_id),
@@ -153,7 +162,7 @@ async def evaluate_lesson_practice(
     audio_bytes = await audio.read()
     
     try:
-        return await lesson_service.evaluate_practice(db, uid, lesson_id, audio_bytes)
+        return await lesson_service.evaluate_practice(db, uid, lesson_id, audio_bytes, mime_type=audio.content_type)
     except ValueError as e:
         if "Heart" in str(e) or "heart" in str(e):
             raise HTTPException(status_code=402, detail=str(e))
@@ -178,6 +187,7 @@ async def get_my_history(
         .join(Chapter, Lesson.chapter_id == Chapter.id)
         .where(LessonAttemptFeedback.user_id == uid)
         .order_by(LessonAttemptFeedback.created_at.desc())
+        .limit(5)
     )
     rows = result.all()
     return [
@@ -201,6 +211,7 @@ async def get_my_history(
             emotion_feedback=f.emotion_feedback,
             advice_text=f.advice_text,
             filler_word_count=f.filler_word_count,
+            extracted_mistakes=f.mistakes or [],
             created_at=f.created_at.isoformat(),
         )
         for f, lesson, chapter in rows
@@ -222,6 +233,7 @@ async def get_lesson_feedbacks(
             LessonAttemptFeedback.lesson_id == lesson_id,
         )
         .order_by(LessonAttemptFeedback.created_at.desc())
+        .limit(5)
     )
     feedbacks = result.scalars().all()
     return [
@@ -242,6 +254,8 @@ async def get_lesson_feedbacks(
             emotion_feedback=f.emotion_feedback,
             advice_text=f.advice_text,
             filler_word_count=f.filler_word_count,
+            extracted_mistakes=f.mistakes or [],
+            transcript=f.transcript,
             created_at=f.created_at.isoformat(),
         )
         for f in feedbacks

@@ -1,4 +1,3 @@
-"""Core lesson specific actions, like answering a practice action."""
 import uuid
 from datetime import datetime, timezone
 
@@ -7,8 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.lesson import Lesson, LessonAttemptFeedback, UserLessonProgress
 from app.models.conversation import UserMistake
+from app.models.user import User, EnergyLog
 from app.schemas.lesson import LessonAttemptFeedbackOut
-from app.services import ai_service, stt_service, heart_service, achievement_service
+from app.services import ai_service, heart_service, achievement_service
 from app.services import supabase_storage
 
 
@@ -17,6 +17,7 @@ async def evaluate_practice(
     user_id: uuid.UUID,
     lesson_id: uuid.UUID,
     audio_bytes: bytes,
+    mime_type: str = "audio/webm",
 ) -> LessonAttemptFeedbackOut:
     """
     Handle a practice audio upload for a given lesson:
@@ -30,8 +31,6 @@ async def evaluate_practice(
     if not lesson:
         raise ValueError("Lesson not found")
 
-    action_prompt = lesson.action_prompt or "Tình huống giao tiếp cơ bản"
-
     # Consume 1 heart for the attempt
     await heart_service.consume_heart(
         db,
@@ -40,13 +39,37 @@ async def evaluate_practice(
         reference_id=lesson_id,
     )
 
-    # Convert audio to text
-    user_text = await stt_service.transcribe_audio(audio_bytes)
-    if not user_text.strip():
-        raise ValueError("Không nhận diện được giọng nói. Hãy ghi âm lại rõ hơn.")
+    # Gọi AI để đánh giá (Multimodal: Gemini phân tích trực tiếp audio)
+    # Nếu Gemini lỗi hoàn toàn → hoàn heart lại và báo lỗi
+    try:
+        analysis = await ai_service.evaluate_lesson_practice(
+            action_prompt=lesson.action_prompt or "Tình huống giao tiếp cơ bản",
+            audio_bytes=audio_bytes,
+            mime_type=mime_type
+        )
+    except Exception as ai_err:
+        # Hoàn lại 1 heart vì AI bị lỗi không phải lỗi của user
+        try:
+            user_obj = await db.get(User, user_id)
+            if user_obj:
+                user_obj.energy = min(user_obj.energy + 1, getattr(user_obj, "max_energy", 20))
+                db.add(EnergyLog(
+                    user_id=user_id,
+                    delta=1,
+                    reason="ai_error_refund",
+                    energy_after=user_obj.energy,
+                ))
+        except Exception:
+            pass
+        raise RuntimeError(f"AI không phân tích được audio. Vui lòng thử lại. ({ai_err})") from ai_err
+
+    user_text = analysis.get("transcript", "")
+    # Không raise khi transcript rỗng – AI vẫn trả điểm (audio quá ngắn/yên lặng)
+    # Chỉ log warning để biết
 
     # AI evaluation
-    raw_feedback = await ai_service.evaluate_lesson_practice(action_prompt, user_text)
+    # The new ai_service.evaluate_lesson_practice now returns the full analysis
+    raw_feedback = analysis
 
     content_score = float(raw_feedback.get("content_score", 0))
     speed_score = float(raw_feedback.get("fluency_score", 0))
@@ -88,17 +111,20 @@ async def evaluate_practice(
         emotion_feedback=emotion_feedback,
         advice_text=advice_text or feedback_text,
         filler_word_count=filler_word_count,
+        mistakes=extracted_mistakes,
     )
     db.add(feedback)
     await db.flush()
 
     # Upload audio lên Supabase Storage (lưu 3 ngày), gán audio_url
+    # Dùng mime_type thực tế từ client thay vì hardcode
+    upload_content_type = mime_type if mime_type else "audio/webm"
     audio_url = await supabase_storage.upload_audio(
-        audio_bytes, "practice", user_id, feedback.id, content_type="audio/webm"
+        audio_bytes, "practice", user_id, feedback.id, content_type=upload_content_type
     )
     if audio_url:
         feedback.audio_url = audio_url
-        await db.flush() # Lưu URL ngay lập tức
+        await db.flush()  # Lưu URL ngay lập tức
 
     # Process extracted mistakes
     for mistake in extracted_mistakes:
@@ -151,28 +177,29 @@ async def evaluate_practice(
             watch_percent=0,
             stars=overall_stars,
             attempts=1,
-            best_score=int(overall_score),
-            completed=(overall_score >= 60),
+            best_score=round(overall_score),
+            completed=(round(overall_score) >= 60),
             transcript=user_text,
             audio_url=feedback.audio_url,
-            completed_at=datetime.now(timezone.utc) if overall_score >= 60 else None,
+            completed_at=datetime.now(timezone.utc) if round(overall_score) >= 60 else None,
         )
         db.add(progress)
     else:
         progress.attempts += 1
         progress.transcript = user_text
-        if int(overall_score) > progress.best_score:
-            progress.best_score = int(overall_score)
+        
+        new_score = round(overall_score)
+        
+        if new_score > progress.best_score:
+            progress.best_score = new_score
             progress.stars = overall_stars
-            progress.audio_url = feedback.audio_url  # Update audio if it's the best score
+            progress.audio_url = feedback.audio_url
 
-        if not progress.completed and overall_score >= 60:
+        if not progress.completed and new_score >= 60:
             progress.completed = True
             progress.completed_at = datetime.now(timezone.utc)
-            if progress.stars < 3:
-                progress.stars = overall_stars
-            # Đảm bảo audio_url cũng được cập nhật nếu bài học mới hoàn thành
-            if feedback.audio_url:
+            # stars đã được cập nhật ở dòng trên (vì 60 > best_score ban đầu)
+            if feedback.audio_url and not progress.audio_url:
                 progress.audio_url = feedback.audio_url
 
     await db.flush()

@@ -242,5 +242,6 @@ export interface LessonAttemptHistoryItem {
   emotion_feedback: string | null;
   advice_text: string | null;
   filler_word_count: number;
+  extracted_mistakes: ExtractedMistake[];
   created_at: string;
 }
