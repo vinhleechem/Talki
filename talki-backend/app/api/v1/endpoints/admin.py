@@ -18,6 +18,7 @@ from app.models.conversation import Conversation, ConversationStatus
 from app.models.lesson import Boss, Chapter, Lesson
 from app.models.payment import PaymentOrder
 from app.models.user import EnergyLog, User
+from app.services import cloudinary_service
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -734,3 +735,17 @@ async def list_energy_logs(
         )
 
     return out
+
+
+# ─── Cloudinary Upload Signature ─────────────────────────────────────────────
+
+@router.post("/upload-signature")
+async def get_upload_signature(
+    resource_type: str = "video",
+    _: str = Depends(require_admin),
+):
+    """Trả về signed upload params để FE upload thẳng lên Cloudinary."""
+    try:
+        return cloudinary_service.get_upload_signature(resource_type=resource_type)
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))

@@ -1083,6 +1083,8 @@ function ChapterCard({
   const [lessons, setLessons] = useState<AdminLesson[]>([]);
   const [loadingLessons, setLoadingLessons] = useState(false);
   const [loadedOnce, setLoadedOnce] = useState(false);
+  const [editingThreshold, setEditingThreshold] = useState(false);
+  const [thresholdInput, setThresholdInput] = useState(String(chapter.boss_unlock_threshold));
 
   // Modal thêm / sửa lesson
   const [lessonModal, setLessonModal] = useState<{ open: boolean; editId: string | null }>({ open: false, editId: null });
@@ -1095,6 +1097,50 @@ function ChapterCard({
     is_published: false,
   });
   const [savingLesson, setSavingLesson] = useState(false);
+  const [uploadState, setUploadState] = useState<"idle" | "uploading" | "done" | "error">("idle");
+  const [uploadProgress, setUploadProgress] = useState(0);
+
+  async function uploadToCloudinary(file: File) {
+    setUploadState("uploading");
+    setUploadProgress(0);
+    try {
+      const sig = await adminApi.getUploadSignature("video");
+      const form = new FormData();
+      form.append("file", file);
+      form.append("api_key", sig.api_key);
+      form.append("timestamp", String(sig.timestamp));
+      form.append("signature", sig.signature);
+      form.append("folder", sig.folder);
+
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", sig.upload_url);
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) setUploadProgress(Math.round((e.loaded / e.total) * 100));
+        };
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            const res = JSON.parse(xhr.responseText);
+            // Auto-fill URL và duration
+            setLessonForm((f) => ({
+              ...f,
+              video_url: res.secure_url,
+              video_duration: Math.round(res.duration ?? 0),
+            }));
+            setUploadState("done");
+            resolve();
+          } else {
+            reject(new Error(`Upload thất bại: ${xhr.status}`));
+          }
+        };
+        xhr.onerror = () => reject(new Error("Network error khi upload"));
+        xhr.send(form);
+      });
+    } catch (err: unknown) {
+      console.error(err);
+      setUploadState("error");
+    }
+  }
 
   async function toggle() {
     if (!expanded && !loadedOnce) {
@@ -1126,6 +1172,8 @@ function ChapterCard({
 
   function closeModal() {
     setLessonModal({ open: false, editId: null });
+    setUploadState("idle");
+    setUploadProgress(0);
   }
 
   async function saveLesson() {
@@ -1195,16 +1243,54 @@ function ChapterCard({
               {chapter.title}
             </h3>
             
-            <span 
-              className="px-3 py-0.5 text-xs font-bold"
-              style={{ 
-                backgroundColor: chapter.is_published ? "#ffebd2" : "white", 
-                color: chapter.is_published ? PRIMARY : "#64748b", 
-                border: `2px solid ${chapter.is_published ? PRIMARY : "#64748b"}` 
-              }}
-            >
-              {chapter.boss_unlock_threshold}% HOÀN THÀNH ĐỂ MỞ BOSS
-            </span>
+            {editingThreshold ? (
+              <span className="flex items-center gap-1">
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  className="w-14 px-1 py-0.5 text-xs font-bold text-center focus:outline-none"
+                  style={{ border: "2px solid black" }}
+                  value={thresholdInput}
+                  onChange={(e) => setThresholdInput(e.target.value)}
+                  onBlur={async () => {
+                    const v = Math.min(100, Math.max(1, Number(thresholdInput) || 80));
+                    setEditingThreshold(false);
+                    setThresholdInput(String(v));
+                    if (v === chapter.boss_unlock_threshold) return;
+                    try {
+                      const updated = await adminApi.updateChapter(chapter.id, { boss_unlock_threshold: v });
+                      onUpdate(updated);
+                    } catch (err) {
+                      setThresholdInput(String(chapter.boss_unlock_threshold));
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                    if (e.key === "Escape") {
+                      setThresholdInput(String(chapter.boss_unlock_threshold));
+                      setEditingThreshold(false);
+                    }
+                  }}
+                  autoFocus
+                />
+                <span className="text-xs font-bold">% hoàn thành để mở Boss</span>
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setThresholdInput(String(chapter.boss_unlock_threshold)); setEditingThreshold(true); }}
+                className="px-3 py-0.5 text-xs font-bold text-left hover:ring-2 ring-primary/50 transition-all"
+                style={{ 
+                  backgroundColor: chapter.is_published ? "#ffebd2" : "white", 
+                  color: chapter.is_published ? PRIMARY : "#64748b", 
+                  border: `2px solid ${chapter.is_published ? PRIMARY : "#64748b"}` 
+                }}
+                title="Bấm để sửa % tiến độ mở Boss"
+              >
+                {chapter.boss_unlock_threshold}% HOÀN THÀNH ĐỂ MỞ BOSS
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -1394,10 +1480,59 @@ function ChapterCard({
               </div>
 
               <div>
-                <label className="block text-xs font-black uppercase mb-1">Video URL</label>
+                <label className="block text-xs font-black uppercase mb-1">Video</label>
+
+                {/* Upload trực tiếp lên Cloudinary */}
+                <div
+                  className="w-full mb-2 flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-orange-50 transition-colors"
+                  style={{ border: "2px dashed black" }}
+                  onClick={() => document.getElementById("videoFileInput")?.click()}
+                >
+                  <input
+                    id="videoFileInput"
+                    type="file"
+                    accept="video/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) uploadToCloudinary(file);
+                    }}
+                  />
+                  {uploadState === "idle" && (
+                    <span className="text-xs font-black text-muted-foreground uppercase tracking-widest w-full text-center">
+                      ☁️ Nhấn để tải video lên Cloudinary
+                    </span>
+                  )}
+                  {uploadState === "uploading" && (
+                    <div className="w-full">
+                      <div className="flex justify-between mb-1">
+                        <span className="text-xs font-black uppercase">Đang tải lên...</span>
+                        <span className="text-xs font-black">{uploadProgress}%</span>
+                      </div>
+                      <div className="w-full h-2 bg-gray-200" style={{ border: "1px solid black" }}>
+                        <div
+                          className="h-full bg-orange-400 transition-all"
+                          style={{ width: `${uploadProgress}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  {uploadState === "done" && (
+                    <span className="text-xs font-black text-green-600 uppercase tracking-widest w-full text-center">
+                      ✓ Upload thành công! URL đã được điền tự động.
+                    </span>
+                  )}
+                  {uploadState === "error" && (
+                    <span className="text-xs font-black text-red-500 uppercase tracking-widest w-full text-center">
+                      ✗ Upload thất bại – kiểm tra Cloudinary key trong .env
+                    </span>
+                  )}
+                </div>
+
+                {/* URL thủ công (hoặc kết quả tự động sau upload) */}
                 <input
                   className="w-full px-3 py-2 text-sm font-bold focus:outline-none"
-                  placeholder="https://www.youtube.com/watch?v=..."
+                  placeholder="Hoặc dán URL video trực tiếp..."
                   style={{ border: "2px solid black" }}
                   value={lessonForm.video_url}
                   onChange={(e) => setLessonForm({ ...lessonForm, video_url: e.target.value })}
@@ -1498,6 +1633,7 @@ function ContentPage() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [newTitle, setNewTitle] = useState("");
+  const [newBossUnlockThreshold, setNewBossUnlockThreshold] = useState(80);
   const [searchTerm, setSearchTerm] = useState("");
   const [publishFilter, setPublishFilter] = useState("all");
   const [page, setPage] = useState(1);
@@ -1512,10 +1648,16 @@ function ContentPage() {
 
   async function createChapter() {
     if (!newTitle.trim()) return;
+    const pct = Math.min(100, Math.max(1, newBossUnlockThreshold));
     try {
-      const chapter = await adminApi.createChapter({ title: newTitle, order_index: chapters.length });
+      const chapter = await adminApi.createChapter({
+        title: newTitle,
+        order_index: chapters.length,
+        boss_unlock_threshold: pct,
+      });
       setChapters((c) => [...c, chapter]);
       setNewTitle("");
+      setNewBossUnlockThreshold(80);
       setCreating(false);
     } catch (err) {
       handleError(err);
@@ -1594,40 +1736,67 @@ function ContentPage() {
           <button
             onClick={() => setCreating(true)}
             className="flex items-center gap-2 bg-primary text-white px-6 h-12 font-black uppercase transition-all hover:translate-x-[2px] hover:translate-y-[2px]"
-            style={{ border: "3px solid black", boxShadow: creating ? "0px 0px 0px 0px black" : "4px 4px 0px 0px black" }}
+            style={{ border: "3px solid black", boxShadow: "4px 4px 0px 0px black" }}
           >
             <span className="material-symbols-outlined font-bold">add_box</span> Thêm Chương
           </button>
         </div>
       </div>
 
-      {creating && (
-        <div className="bg-white p-4 mb-4 flex gap-3 items-center" style={neo.card}>
-          <input
-            autoFocus
-            className="flex-1 px-3 py-2 font-bold focus:outline-none"
-            placeholder="Tên chapter..."
-            style={{ border: "2px solid black" }}
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && createChapter()}
-          />
-          <button
-            onClick={createChapter}
-            className="font-black text-xs px-3 py-2 text-white"
-            style={{ backgroundColor: PRIMARY, border: "2px solid black" }}
-          >
-            Tạo
-          </button>
-          <button
-            onClick={() => setCreating(false)}
-            className="font-black text-xs px-3 py-2"
-            style={{ border: "2px solid black" }}
-          >
-            Huỷ
-          </button>
-        </div>
-      )}
+      <Dialog open={creating} onOpenChange={(open) => !open && setCreating(false)}>
+        <DialogContent className="p-0 overflow-hidden" style={neo.card}>
+          <DialogHeader className="px-4 py-3" style={{ borderBottom: "2px solid black", backgroundColor: "#f8f4ec" }}>
+            <DialogTitle className="text-sm font-black uppercase tracking-wider">Tạo chương mới</DialogTitle>
+            <DialogDescription className="text-xs font-bold text-slate-500">
+              Nhập tên chương và % bài học cần hoàn thành (3★ trở lên) để mở Boss.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="p-4 flex flex-col gap-4">
+            <div>
+              <label className="block text-xs font-black uppercase text-slate-600 mb-1">Tên chương</label>
+              <input
+                autoFocus
+                className="w-full px-3 py-2 font-bold focus:outline-none"
+                placeholder="VD: Giao tiếp cơ bản"
+                style={{ border: "2px solid black" }}
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && createChapter()}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-black uppercase text-slate-600 mb-1">% tiến độ để mở Boss (1–100)</label>
+              <input
+                type="number"
+                min={1}
+                max={100}
+                className="w-24 px-3 py-2 font-bold text-center focus:outline-none"
+                style={{ border: "2px solid black" }}
+                value={newBossUnlockThreshold}
+                onChange={(e) => setNewBossUnlockThreshold(Number(e.target.value) || 80)}
+              />
+            </div>
+          </div>
+          <DialogFooter className="px-4 py-3 gap-2 flex justify-end" style={{ borderTop: "2px solid black", backgroundColor: "#fafaf8" }}>
+            <button
+              type="button"
+              onClick={() => setCreating(false)}
+              className="font-black text-xs px-4 py-2"
+              style={{ border: "2px solid black" }}
+            >
+              Huỷ
+            </button>
+            <button
+              type="button"
+              onClick={createChapter}
+              className="font-black text-xs px-4 py-2 text-white"
+              style={{ backgroundColor: PRIMARY, border: "2px solid black" }}
+            >
+              Tạo chương
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="grid gap-3">
         {filteredChapters.length === 0 && <p className="text-sm font-bold text-slate-500">Không có chapter phù hợp bộ lọc.</p>}

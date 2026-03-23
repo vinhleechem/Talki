@@ -18,7 +18,7 @@ class Settings(BaseSettings):
 
     # Google Gemini AI
     GEMINI_API_KEY: str
-    GEMINI_MODEL: str = "gemini-1.5-flash"
+    GEMINI_MODEL: str = "gemini-2.0-flash"
 
     # Google Cloud (STT / TTS)
     GOOGLE_CLOUD_CREDENTIALS_JSON: str = ""  # path to service account JSON
@@ -27,6 +27,12 @@ class Settings(BaseSettings):
     PAYOS_CLIENT_ID: str = ""
     PAYOS_API_KEY: str = ""
     PAYOS_CHECKSUM_KEY: str = ""
+
+    # Cloudinary (media hosting for lesson videos)
+    CLOUDINARY_CLOUD_NAME: str = ""
+    CLOUDINARY_API_KEY: str = ""
+    CLOUDINARY_API_SECRET: str = ""
+    CLOUDINARY_UPLOAD_FOLDER: str = "talki-lessons"
 
     # Hearts system
     FREE_HEARTS_PER_DAY: int = 3

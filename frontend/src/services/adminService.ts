@@ -74,4 +74,15 @@ export const adminApi = {
   updateAchievement: (id: string, body: object) =>
     apiFetch<AdminAchievement>(`/admin/achievements/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteAchievement: (id: string) => apiFetch<void>(`/admin/achievements/${id}`, { method: "DELETE" }),
+
+  // Cloudinary
+  getUploadSignature: (resourceType = "video") =>
+    apiFetch<{
+      cloud_name: string;
+      api_key: string;
+      timestamp: number;
+      signature: string;
+      folder: string;
+      upload_url: string;
+    }>(`/admin/upload-signature?resource_type=${resourceType}`, { method: "POST" }),
 };

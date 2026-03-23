@@ -210,6 +210,7 @@ export interface LessonAttemptFeedback {
   speed_score: number;
   emotion_score: number;
   overall_score: number;
+  audio_url: string | null;
   feedback_text: string | null;
   content_feedback: string | null;
   speed_feedback: string | null;
@@ -233,6 +234,7 @@ export interface LessonAttemptHistoryItem {
   speed_score: number;
   emotion_score: number;
   overall_score: number;
+  audio_url: string | null;
   transcript: string | null;
   feedback_text: string | null;
   content_feedback: string | null;
@@ -240,5 +242,6 @@ export interface LessonAttemptHistoryItem {
   emotion_feedback: string | null;
   advice_text: string | null;
   filler_word_count: number;
+  extracted_mistakes: ExtractedMistake[];
   created_at: string;
 }

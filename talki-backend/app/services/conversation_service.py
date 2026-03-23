@@ -20,7 +20,7 @@ from app.schemas.conversation import (
     StartConversationResponse,
     TurnFeedback,
 )
-from app.services import ai_service, stt_service, tts_service, achievement_service
+from app.services import ai_service, stt_service, tts_service, achievement_service, supabase_storage
 from app.utils.text_analysis import count_filler_words, total_filler_count
 
 
@@ -68,24 +68,21 @@ async def process_speak_turn(
         .order_by(ConversationTurn.turn_index)
     )
     existing_turns = result.scalars().all()
-    turn_index = len(existing_turns)
-
-    # STT
-    user_text = await stt_service.transcribe_audio(audio_bytes)
-    fillers = total_filler_count(user_text)
-
     # Build history for Gemini
     history = [
         {"role": "user" if i % 2 == 0 else "model", "parts": [t.user_transcript or t.ai_reply_text]}
         for i, t in enumerate(existing_turns)
     ]
+    turn_index = len(existing_turns)
 
-    # AI response
-    ai_text, should_end = await ai_service.chat_turn(
+    # AI response (Multimodal: Gemini phân tích audio và trả lời)
+    user_text, ai_text, should_end = await ai_service.chat_turn(
         persona_prompt=boss.persona_prompt,
         history=history,
-        user_text=user_text,
+        audio_bytes=audio_bytes,
     )
+
+    fillers = count_filler_words(user_text)
 
     # TTS
     ai_audio = await tts_service.synthesize_speech(ai_text)
@@ -101,6 +98,14 @@ async def process_speak_turn(
         ai_audio_url=ai_audio_url,
     )
     db.add(turn)
+    await db.flush()
+
+    # Upload user audio
+    user_audio_url = await supabase_storage.upload_audio(
+        audio_bytes, "boss", convo.user_id, turn.id, content_type="audio/webm"
+    )
+    if user_audio_url:
+        turn.user_audio_url = user_audio_url
 
     is_last = should_end or (turn_index + 1 >= boss.max_turns)
     if is_last:
@@ -115,6 +120,7 @@ async def process_speak_turn(
         filler_word_count=fillers,
         ai_reply_text=ai_text,
         ai_audio_url=ai_audio_url,
+        user_audio_url=turn.user_audio_url,
         is_last_turn=is_last,
     )
 

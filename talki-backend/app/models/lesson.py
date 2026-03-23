@@ -2,7 +2,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -121,7 +121,7 @@ class LessonAttemptFeedback(Base):
     audio_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     transcript: Mapped[str | None] = mapped_column(Text, nullable=True)
     stars: Mapped[int] = mapped_column(Integer, default=0)           # 0-5
-    score: Mapped[int] = mapped_column(Integer, default=0)           # 0-100
+    # score đã bỏ, chỉ dùng overall_score (0-100); API trả score = round(overall_score)
     content_feedback: Mapped[str | None] = mapped_column(Text, nullable=True)
     speed_feedback: Mapped[str | None] = mapped_column(Text, nullable=True)
     emotion_feedback: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -132,4 +132,6 @@ class LessonAttemptFeedback(Base):
     emotion_score: Mapped[float] = mapped_column(Float, default=0.0)   # 0-10
     overall_score: Mapped[float] = mapped_column(Float, default=0.0)   # 0-100
     feedback_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Store extracted mistakes for this specific attempt as JSON
+    mistakes: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True) 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

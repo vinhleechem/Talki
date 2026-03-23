@@ -16,7 +16,7 @@ export const lessonService = {
   submitAudioPractice(lessonId: string, audioBlob: Blob): Promise<LessonAttemptFeedback> {
     const formData = new FormData();
     formData.append("audio", audioBlob, "practice.webm");
-    return apiFetch<LessonAttemptFeedback>(`/lessons/${lessonId}/practice`, {
+    return apiFetch<LessonAttemptFeedback>(`/lessons/${lessonId}/submit`, {
       method: "POST",
       body: formData,
     });

@@ -41,7 +41,7 @@ function StarRow({ stars }: { stars: number }) {
 
 /* ─── attempt card ─────────────────────────────────────────── */
 
-function AttemptCard({ item }: { item: LessonAttemptHistoryItem }) {
+function AttemptCard({ item, displayNumber }: { item: LessonAttemptHistoryItem; displayNumber: number }) {
   const [open, setOpen] = useState(false);
   const hasFeedback = item.content_feedback || item.speed_feedback || item.emotion_feedback || item.advice_text;
 
@@ -58,7 +58,7 @@ function AttemptCard({ item }: { item: LessonAttemptHistoryItem }) {
       >
         {/* Attempt badge */}
         <div className="w-8 h-8 bg-foreground text-background flex items-center justify-center font-black text-xs neo-border flex-shrink-0">
-          #{item.attempt_number}
+          #{displayNumber}
         </div>
 
         <div className="flex-1 min-w-0">
@@ -99,14 +99,25 @@ function AttemptCard({ item }: { item: LessonAttemptHistoryItem }) {
       {open && (
         <div className="border-t neo-border-t px-4 py-4 space-y-4 bg-muted/20">
           {/* What user said */}
-          {item.transcript && (
-            <div>
-              <p className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-1">
+          {(item.audio_url || item.transcript) && (
+            <div className="space-y-2">
+              <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">
                 🎙️ Bạn đã nói
               </p>
-              <p className="text-sm text-foreground leading-relaxed italic border-l-2 border-primary pl-3">
-                "{item.transcript}"
-              </p>
+              {item.audio_url && (
+                <audio
+                  controls
+                  src={item.audio_url}
+                  className="w-full h-10 rounded"
+                  style={{ accentColor: "var(--primary)" }}
+                  onError={(e) => { (e.currentTarget as HTMLAudioElement).style.display = "none"; }}
+                />
+              )}
+              {item.transcript && (
+                <p className="text-sm text-foreground leading-relaxed italic border-l-2 border-primary pl-3">
+                  "{item.transcript}"
+                </p>
+              )}
             </div>
           )}
 
@@ -271,8 +282,8 @@ const FeedbackHistory = () => {
         {/* List */}
         {!loading && !error && items.length > 0 && (
           <div className="space-y-3">
-            {items.map((item) => (
-              <AttemptCard key={item.id} item={item} />
+            {items.map((item, index) => (
+              <AttemptCard key={item.id} item={item} displayNumber={items.length - index} />
             ))}
           </div>
         )}

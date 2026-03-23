@@ -29,6 +29,8 @@ const Practice = () => {
   const [scores, setScores] = useState({ content: 0, speed: 0, emotion: 0 });
   const [detailFeedback, setDetailFeedback] = useState({ content: "", speed: "", emotion: "", advice: "" });
   const [transcript, setTranscript] = useState("");
+  const [localAudioUrl, setLocalAudioUrl] = useState<string | null>(null);
+  const [remoteAudioUrl, setRemoteAudioUrl] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
@@ -56,6 +58,9 @@ const Practice = () => {
       mediaRecorder.onstop = async () => {
         setIsLoading(true);
         const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm;codecs=opus" });
+        // Tạo blob URL để nghe lại ngay lập tức (không cần chờ Supabase)
+        const blobUrl = URL.createObjectURL(audioBlob);
+        setLocalAudioUrl(blobUrl);
 
         const lessonId: string | undefined = lesson?.id;
         if (!lessonId) {
@@ -85,6 +90,7 @@ const Practice = () => {
             advice: res.advice_text || res.feedback_text || "",
           });
           setTranscript(res.transcript || "");
+          setRemoteAudioUrl(res.audio_url || null);
           setHasRecorded(true);
         } catch (error: unknown) {
           console.error(error);
@@ -140,6 +146,9 @@ const Practice = () => {
     setScores({ content: 0, speed: 0, emotion: 0 });
     setDetailFeedback({ content: "", speed: "", emotion: "", advice: "" });
     setTranscript("");
+    if (localAudioUrl) URL.revokeObjectURL(localAudioUrl);
+    setLocalAudioUrl(null);
+    setRemoteAudioUrl(null);
     audioChunksRef.current = [];
   };
 
@@ -462,14 +471,25 @@ const Practice = () => {
                   </div>
                 )}
 
-                {transcript && (
-                  <div className="bg-muted/40 neo-border rounded-sm p-4">
-                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-2">
+                {(transcript || localAudioUrl) && (
+                  <div className="bg-muted/40 neo-border rounded-sm p-4 space-y-3">
+                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">
                       🎙️ Bạn đã nói
                     </p>
-                    <p className="text-sm text-foreground leading-relaxed italic border-l-2 border-primary pl-3">
-                      "{transcript}"
-                    </p>
+                    {/* Audio player – dùng blob URL ngay sau ghi âm, fallback Supabase */}
+                    {(localAudioUrl || remoteAudioUrl) && (
+                      <audio
+                        controls
+                        src={localAudioUrl ?? remoteAudioUrl ?? undefined}
+                        className="w-full h-10 rounded"
+                        style={{ accentColor: "var(--primary)" }}
+                      />
+                    )}
+                    {transcript && (
+                      <p className="text-sm text-foreground leading-relaxed italic border-l-2 border-primary pl-3">
+                        "{transcript}"
+                      </p>
+                    )}
                   </div>
                 )}
 
