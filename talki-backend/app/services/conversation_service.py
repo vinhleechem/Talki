@@ -20,7 +20,7 @@ from app.schemas.conversation import (
     StartConversationResponse,
     TurnFeedback,
 )
-from app.services import ai_service, stt_service, tts_service, achievement_service, supabase_storage
+from app.services import ai_service, achievement_service, supabase_storage
 from app.utils.text_analysis import count_filler_words, total_filler_count
 
 
@@ -39,14 +39,12 @@ async def start_conversation(
 
     # AI sends first greeting
     greeting_text = f"Xin chào! Tôi là {boss.name}. Hãy bắt đầu."
-    greeting_audio = await tts_service.synthesize_speech(greeting_text)
-    audio_url = f"/audio/{convo.id}/greeting.mp3"  # placeholder; upload to storage in prod
 
     return StartConversationResponse(
         conversation_id=convo.id,
         boss_name=boss.name,
         greeting_text=greeting_text,
-        greeting_audio_url=audio_url,
+        greeting_audio_url=None,
     )
 
 
@@ -84,9 +82,7 @@ async def process_speak_turn(
 
     fillers = count_filler_words(user_text)
 
-    # TTS
-    ai_audio = await tts_service.synthesize_speech(ai_text)
-    ai_audio_url = f"/audio/{conversation_id}/turn_{turn_index}_ai.mp3"
+    ai_audio_url = None  # TTS removed – frontend handles playback if needed
 
     # Persist turn
     turn = ConversationTurn(

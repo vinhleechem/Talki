@@ -1,4 +1,4 @@
-"""Speech-to-Text using Google Cloud Speech-to-Text v1."""
+    """Speech-to-Text using Google Cloud Speech-to-Text v1."""
 import json
 import os
 from pathlib import Path
