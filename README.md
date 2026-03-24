@@ -366,7 +366,8 @@ bun run dev
 
 ```powershell
 cd talki-backend
-pip install -r requirements.txt
+pip install -r requirements.txt # hoặc: python -m pip install -r requirements.txt
+
 Copy-Item .env.example .env   # điền DATABASE_URL, SUPABASE_*, GEMINI_API_KEY
 .\run.ps1
 # → http://localhost:8000
