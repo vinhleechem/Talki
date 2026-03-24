@@ -1,7 +1,8 @@
 """Payment endpoints."""
 import uuid
+from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
@@ -16,8 +17,37 @@ class CreatePaymentRequest(BaseModel):
     plan: str  # 'monthly' or 'yearly'
 
 
+class ManualPaymentConfigOut(BaseModel):
+    qr_image_url: str | None
+    bank_name: str | None
+    account_number: str | None
+    account_name: str | None
+    transfer_prefix: str
+    instructions: str | None
+
+
+class ManualPaymentOrderOut(BaseModel):
+    id: uuid.UUID
+    plan: str
+    amount_vnd: int
+    status: str
+    transfer_note: str | None
+    expires_at: datetime
+    created_at: datetime
+    paid_at: datetime | None
+
+    # Inline instructions to simplify FE integration for now
+    qr_image_url: str | None
+    bank_name: str | None
+    account_number: str | None
+    account_name: str | None
+    instructions: str | None
+
+
 class CreatePaymentResponse(BaseModel):
     checkoutUrl: str
+    orderId: uuid.UUID
+    transferNote: str | None
 
 
 @router.post("/create-link", response_model=CreatePaymentResponse)
@@ -27,24 +57,91 @@ async def create_payment_link(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        url = await payment_service.create_payment_url(db, uuid.UUID(user_id), body.plan)
-        return CreatePaymentResponse(checkoutUrl=url)
+        order, config = await payment_service.create_manual_payment_order(
+            db,
+            uuid.UUID(user_id),
+            body.plan,
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal server error")
+
+    return CreatePaymentResponse(
+        checkoutUrl=config.qr_image_url or "",
+        orderId=order.id,
+        transferNote=order.transfer_note,
+    )
 
 
-@router.post("/webhook")
-async def payos_webhook(
-    request: Request,
+@router.get("/config", response_model=ManualPaymentConfigOut)
+async def get_manual_payment_config(
+    _user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    config = await payment_service.get_or_create_manual_config(db)
+    return ManualPaymentConfigOut(
+        qr_image_url=config.qr_image_url,
+        bank_name=config.bank_name,
+        account_number=config.account_number,
+        account_name=config.account_name,
+        transfer_prefix=config.transfer_prefix,
+        instructions=config.instructions,
+    )
+
+
+@router.post("/orders", response_model=ManualPaymentOrderOut, status_code=201)
+async def create_manual_payment_order(
+    body: CreatePaymentRequest,
+    user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        body = await request.json()
-        result = await payment_service.handle_payos_webhook(db, body)
-        return {"success": True, **result}
-    except Exception as e:
-        # PayOS expects 200 OK even on failure, but we log the issue
-        print(f"Webhook error: {e}")
-        return {"success": False, "error": str(e)}
+        order, config = await payment_service.create_manual_payment_order(
+            db,
+            uuid.UUID(user_id),
+            body.plan,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return ManualPaymentOrderOut(
+        id=order.id,
+        plan=order.plan,
+        amount_vnd=order.amount_vnd,
+        status=order.status,
+        transfer_note=order.transfer_note,
+        expires_at=order.expires_at,
+        created_at=order.created_at,
+        paid_at=order.paid_at,
+        qr_image_url=config.qr_image_url,
+        bank_name=config.bank_name,
+        account_number=config.account_number,
+        account_name=config.account_name,
+        instructions=config.instructions,
+    )
+
+
+@router.get("/my-orders", response_model=list[ManualPaymentOrderOut])
+async def list_my_orders(
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    orders = await payment_service.list_user_payment_orders(db, uuid.UUID(user_id))
+    config = await payment_service.get_or_create_manual_config(db)
+    return [
+        ManualPaymentOrderOut(
+            id=order.id,
+            plan=order.plan,
+            amount_vnd=order.amount_vnd,
+            status=order.status,
+            transfer_note=order.transfer_note,
+            expires_at=order.expires_at,
+            created_at=order.created_at,
+            paid_at=order.paid_at,
+            qr_image_url=config.qr_image_url,
+            bank_name=config.bank_name,
+            account_number=config.account_number,
+            account_name=config.account_name,
+            instructions=config.instructions,
+        )
+        for order in orders
+    ]

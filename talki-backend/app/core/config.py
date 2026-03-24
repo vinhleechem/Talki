@@ -23,11 +23,6 @@ class Settings(BaseSettings):
     # Google Cloud (STT / TTS)
     GOOGLE_CLOUD_CREDENTIALS_JSON: str = ""  # path to service account JSON
 
-    # PayOS
-    PAYOS_CLIENT_ID: str = ""
-    PAYOS_API_KEY: str = ""
-    PAYOS_CHECKSUM_KEY: str = ""
-
     # Cloudinary (media hosting for lesson videos)
     CLOUDINARY_CLOUD_NAME: str = ""
     CLOUDINARY_API_KEY: str = ""

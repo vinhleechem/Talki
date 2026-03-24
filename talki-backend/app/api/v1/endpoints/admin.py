@@ -18,7 +18,7 @@ from app.models.conversation import Conversation, ConversationStatus
 from app.models.lesson import Boss, Chapter, Lesson
 from app.models.payment import PaymentOrder
 from app.models.user import EnergyLog, User
-from app.services import cloudinary_service
+from app.services import cloudinary_service, payment_service
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -201,11 +201,39 @@ class AdminPaymentOut(BaseModel):
     plan: str
     amount_vnd: int
     status: str
+    transfer_note: Optional[str]
+    admin_note: Optional[str]
+    reviewed_at: Optional[datetime]
+    reviewed_by: Optional[uuid.UUID]
     created_at: datetime
     paid_at: Optional[datetime]
 
     class Config:
         from_attributes = True
+
+
+class AdminManualPaymentConfigOut(BaseModel):
+    qr_image_url: Optional[str]
+    bank_name: Optional[str]
+    account_number: Optional[str]
+    account_name: Optional[str]
+    transfer_prefix: str
+    instructions: Optional[str]
+    updated_at: Optional[datetime]
+
+
+class AdminManualPaymentConfigUpdate(BaseModel):
+    qr_image_url: Optional[str] = None
+    bank_name: Optional[str] = None
+    account_number: Optional[str] = None
+    account_name: Optional[str] = None
+    transfer_prefix: Optional[str] = None
+    instructions: Optional[str] = None
+
+
+class AdminPaymentReviewRequest(BaseModel):
+    status: str  # pending | paid | failed | cancelled
+    admin_note: Optional[str] = None
 
 
 class AdminConversationOut(BaseModel):
@@ -647,6 +675,75 @@ async def list_payments(
         select(PaymentOrder).order_by(PaymentOrder.created_at.desc()).offset(skip).limit(limit)
     )
     return result.scalars().all()
+
+
+@router.get("/payment-config", response_model=AdminManualPaymentConfigOut)
+async def get_payment_config(
+    _: str = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    config = await payment_service.get_or_create_manual_config(db)
+    return AdminManualPaymentConfigOut(
+        qr_image_url=config.qr_image_url,
+        bank_name=config.bank_name,
+        account_number=config.account_number,
+        account_name=config.account_name,
+        transfer_prefix=config.transfer_prefix,
+        instructions=config.instructions,
+        updated_at=config.updated_at,
+    )
+
+
+@router.put("/payment-config", response_model=AdminManualPaymentConfigOut)
+async def update_payment_config(
+    body: AdminManualPaymentConfigUpdate,
+    _: str = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    config = await payment_service.get_or_create_manual_config(db)
+
+    update_data = body.model_dump(exclude_none=True)
+    if "transfer_prefix" in update_data:
+        transfer_prefix = (update_data["transfer_prefix"] or "").strip().upper()
+        if not transfer_prefix:
+            raise HTTPException(status_code=400, detail="transfer_prefix cannot be empty")
+        update_data["transfer_prefix"] = transfer_prefix[:20]
+
+    for field, value in update_data.items():
+        setattr(config, field, value)
+
+    await db.flush()
+    return AdminManualPaymentConfigOut(
+        qr_image_url=config.qr_image_url,
+        bank_name=config.bank_name,
+        account_number=config.account_number,
+        account_name=config.account_name,
+        transfer_prefix=config.transfer_prefix,
+        instructions=config.instructions,
+        updated_at=config.updated_at,
+    )
+
+
+@router.patch("/payments/{payment_id}", response_model=AdminPaymentOut)
+async def review_payment(
+    payment_id: uuid.UUID,
+    body: AdminPaymentReviewRequest,
+    admin_user_id: str = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        order = await payment_service.admin_review_payment_order(
+            db,
+            payment_id,
+            uuid.UUID(admin_user_id),
+            body.status,
+            body.admin_note,
+        )
+        return order
+    except ValueError as e:
+        detail = str(e)
+        status_code = 404 if detail == "Payment order not found" else 400
+        raise HTTPException(status_code=status_code, detail=detail)
 
 
 # ─────────────────────────────────────────────
