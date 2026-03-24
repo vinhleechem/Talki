@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
-import { useNavigate, NavLink } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { Zap, Star, Lock, Check, Skull, User } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 import { lessonService } from "@/services/lessonService";
 import type { Chapter } from "@/types";
+import Navbar from "@/components/Navbar";
 
 const RoadMap = () => {
   const navigate = useNavigate();
@@ -83,50 +84,28 @@ const RoadMap = () => {
 
   return (
     <div className="min-h-screen bg-background pb-32">
-      {/* ── Top Header ── */}
-      <header className="sticky top-0 z-50 w-full bg-card neo-border-b flex items-center justify-between px-4 md:px-10 h-16">
-        <NavLink to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-          <div className="bg-primary neo-border neo-shadow-sm w-10 h-10 flex items-center justify-center">
-            <span className="text-xl font-black text-primary-foreground">T</span>
-          </div>
-          <h1 className="text-xl font-black uppercase tracking-tighter">Talki Map</h1>
-        </NavLink>
+      <Navbar />
 
-        <div className="flex items-center gap-3">
-          {/* Energy */}
-          <div className="flex items-center gap-1.5 bg-yellow-400 neo-border neo-shadow-sm px-3 py-1">
-            <Zap className="w-4 h-4 fill-black text-black" />
-            <span className="font-black text-sm text-black">{hearts}/20</span>
+      {/* ── Sub Header (Energy, Stars) ── */}
+      <div className="sticky top-16 z-40 w-full pointer-events-none">
+        <div className="container mx-auto px-4 md:px-8">
+          <div className="flex items-center justify-end h-14 gap-3 py-2">
+            {/* Energy */}
+            <div className="flex items-center gap-1.5 bg-yellow-400 neo-border neo-shadow-sm px-3 py-1 pointer-events-auto">
+              <Zap className="w-4 h-4 fill-black text-black" />
+              <span className="font-black text-sm text-black">{hearts}/20</span>
+            </div>
+            {/* Points */}
+            <div className="hidden sm:flex items-center gap-1.5 bg-primary neo-border neo-shadow-sm px-3 py-1 pointer-events-auto">
+              <Star className="w-4 h-4 fill-white text-white" />
+              <span className="font-black text-sm text-white">0</span>
+            </div>
           </div>
-          {/* Points */}
-          <div className="hidden sm:flex items-center gap-1.5 bg-primary neo-border neo-shadow-sm px-3 py-1">
-            <Star className="w-4 h-4 fill-white text-white" />
-            <span className="font-black text-sm text-white">0</span>
-          </div>
-          {/* Avatar */}
-          <button
-            onClick={() => navigate("/profile")}
-            className="w-10 h-10 neo-border neo-shadow-sm bg-muted flex items-center justify-center overflow-hidden hover:opacity-80 transition-opacity"
-          >
-            {profile?.avatar_url ? (
-              <img src={profile.avatar_url} alt="avatar" className="w-full h-full object-cover" />
-            ) : (
-              <User className="w-5 h-5" />
-            )}
-          </button>
-
-          {/* Exit map */}
-          <button
-            onClick={() => navigate("/")}
-            className="ml-2 px-3 py-1 text-xs font-black uppercase tracking-wider neo-border hover:bg-muted transition-colors"
-          >
-            Thoát
-          </button>
         </div>
-      </header>
+      </div>
 
       {/* ── Main Content ── */}
-      <main className="max-w-4xl mx-auto w-full px-6 py-12 relative">
+      <main className="max-w-4xl mx-auto w-full px-6 pt-10 pb-12 relative">
         {chapters.map((chapter, stageIndex) => {
           const stageUnlocked = isStageUnlocked(stageIndex);
           const bossUnlocked = chapter.boss?.is_unlocked;

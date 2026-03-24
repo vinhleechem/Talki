@@ -22,21 +22,37 @@ const Navbar = () => {
 
           {/* Nav links */}
           <div className="flex items-center gap-4 ml-auto text-sm font-black">
-            {NAV_LINKS.map((item) => (
-              <NavLink key={item.path} to={item.path}>
-                {({ isActive }) => (
-                  <span
-                    className={`inline-flex items-center px-3 py-1.5 uppercase tracking-[0.18em] transition-all cursor-pointer ${
-                      isActive
-                        ? "bg-primary text-primary-foreground neo-border neo-shadow-sm"
-                        : "text-foreground hover:opacity-80"
-                    }`}
-                  >
-                    {item.label}
-                  </span>
-                )}
-              </NavLink>
-            ))}
+            {NAV_LINKS.map((item) => {
+              if (item.path === "/profile") {
+                return (
+                  <NavLink key={item.path} to={item.path}>
+                    {({ isActive }) => (
+                      <span
+                        className={`inline-flex items-center px-4 py-1.5 uppercase tracking-[0.18em] transition-all cursor-pointer bg-primary text-primary-foreground neo-border neo-shadow-sm hover:-translate-y-0.5`}
+                      >
+                        {item.label}
+                      </span>
+                    )}
+                  </NavLink>
+                );
+              }
+
+              return (
+                <NavLink key={item.path} to={item.path}>
+                  {({ isActive }) => (
+                    <span
+                      className={`inline-flex items-center px-3 py-1.5 uppercase transition-all cursor-pointer ${
+                        isActive
+                          ? "text-primary border-b-2 border-primary"
+                          : "text-foreground hover:opacity-80"
+                      }`}
+                    >
+                      {item.label}
+                    </span>
+                  )}
+                </NavLink>
+              );
+            })}
           </div>
 
         </div>
