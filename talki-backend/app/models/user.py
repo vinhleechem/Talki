@@ -64,8 +64,8 @@ class User(Base):
     )
 
     # Relationships
-    payment_orders: Mapped[list["PaymentOrder"]] = relationship(back_populates="user")
-    subscriptions: Mapped[list["Subscription"]] = relationship(back_populates="user")
+    payment_orders: Mapped[list["PaymentOrder"]] = relationship(back_populates="user", foreign_keys="[PaymentOrder.user_id]")
+    subscriptions: Mapped[list["Subscription"]] = relationship(back_populates="user", foreign_keys="[Subscription.user_id]")
     achievements: Mapped[List["UserAchievement"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     energy_logs: Mapped[list["EnergyLog"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 

@@ -38,7 +38,7 @@ class PaymentOrder(Base):
         DateTime(timezone=True), server_default=func.now()
     )
 
-    user: Mapped["User"] = relationship(back_populates="payment_orders")
+    user: Mapped["User"] = relationship(back_populates="payment_orders", foreign_keys=[user_id])
     subscription: Mapped["Subscription"] = relationship(back_populates="payment_order", uselist=False)
 
 class Subscription(Base):
@@ -60,7 +60,7 @@ class Subscription(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    user: Mapped["User"] = relationship(back_populates="subscriptions")
+    user: Mapped["User"] = relationship(back_populates="subscriptions", foreign_keys=[user_id])
     payment_order: Mapped["PaymentOrder"] = relationship(back_populates="subscription")
 
 
