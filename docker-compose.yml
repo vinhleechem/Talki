@@ -8,7 +8,6 @@ services:
       - ./talki-backend/.env # Đọc biến môi trường từ file .env của backend
     volumes:
       - ./talki-backend:/app # Mount code → hot-reload hoạt động
-      - D:/keys:/keys:ro # Mount Windows keys folder for Google credentials
     environment:
       - WATCHFILES_FORCE_POLLING=1
       - GOOGLE_CLOUD_CREDENTIALS_JSON=/keys/talki-490106-da64ab764488.json
