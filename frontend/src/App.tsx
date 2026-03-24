@@ -18,6 +18,7 @@ import Payment from "./pages/Payment";
 import NotFound from "./pages/NotFound";
 import Admin from "./pages/Admin";
 import AdminRoute from "./components/AdminRoute";
+import AdminRedirect from "./components/AdminRedirect";
 
 const queryClient = new QueryClient();
 
@@ -28,6 +29,7 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
+          <AdminRedirect />
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />

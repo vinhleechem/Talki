@@ -19,6 +19,7 @@ async def get_me(
     db: AsyncSession = Depends(get_db),
 ):
     user = await db.get(User, uuid.UUID(user_id))
+    await db.refresh(user)  # force reload from DB to avoid stale identity-map cache
     hearts = await get_hearts(db, uuid.UUID(user_id))
     user.hearts = hearts
     return user
