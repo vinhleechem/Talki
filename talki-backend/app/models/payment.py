@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 
 class PaymentOrder(Base):
-    """PayOS payment order."""
+    """Payment order."""
 
     __tablename__ = "payment_orders"
 
@@ -25,11 +25,6 @@ class PaymentOrder(Base):
     plan: Mapped[str] = mapped_column(String, nullable=False)  # 'monthly' or 'yearly'
     amount_vnd: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String, default="pending")  # 'pending', 'paid', 'failed', 'cancelled'
-
-    # PayOS fields
-    payos_order_id: Mapped[str | None] = mapped_column(String, unique=True, nullable=True)
-    payos_link: Mapped[str | None] = mapped_column(String, nullable=True)
-    # webhook_data usually handled as JSONB, can map as string/dict based on sqlalchemy specific configuration
     
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

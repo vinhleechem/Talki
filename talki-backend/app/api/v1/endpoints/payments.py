@@ -1,7 +1,5 @@
 """Payment endpoints."""
-import uuid
-
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
@@ -23,28 +21,16 @@ class CreatePaymentResponse(BaseModel):
 @router.post("/create-link", response_model=CreatePaymentResponse)
 async def create_payment_link(
     body: CreatePaymentRequest,
-    user_id: str = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
+    _user_id: str = Depends(get_current_user_id),
+    _db: AsyncSession = Depends(get_db),
 ):
+    # Automatic provider-based flow was removed. This endpoint will be replaced by manual payment flow.
     try:
-        url = await payment_service.create_payment_url(db, uuid.UUID(user_id), body.plan)
-        return CreatePaymentResponse(checkoutUrl=url)
+        payment_service.validate_plan(body.plan)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal server error")
 
-
-@router.post("/webhook")
-async def payos_webhook(
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-):
-    try:
-        body = await request.json()
-        result = await payment_service.handle_payos_webhook(db, body)
-        return {"success": True, **result}
-    except Exception as e:
-        # PayOS expects 200 OK even on failure, but we log the issue
-        print(f"Webhook error: {e}")
-        return {"success": False, "error": str(e)}
+    raise HTTPException(
+        status_code=410,
+        detail="Automatic payment link flow has been removed. Manual payment flow is not implemented yet.",
+    )

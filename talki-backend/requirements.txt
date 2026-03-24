@@ -11,5 +11,4 @@ pyjwt               # Xác thực JWT token từ Supabase
 # Cài thêm khi dùng Voice features:
 google-cloud-speech       # STT tiếng Việt
 # google-cloud-texttospeech # TTS (backup, ưu tiên dùng FPT.AI)
-payos                       # Cổng thanh toán QR Code PayOS
 psycopg2-binary             # Driver giúp kết nối Postgres siêu nhanh (bất đồng bộ)
