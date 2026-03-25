@@ -1,4 +1,6 @@
 import { NavLink } from "react-router-dom";
+import { useUser } from "@/contexts/UserContext";
+import { User } from "lucide-react";
 
 const NAV_LINKS = [
   { path: "/roadmap", label: "Bản đồ" },
@@ -8,6 +10,8 @@ const NAV_LINKS = [
 ];
 
 const Navbar = () => {
+  const { profile } = useUser();
+
   return (
     <nav className="fixed top-0 left-0 right-0 bg-card neo-border-b z-50">
       <div className="container mx-auto px-4 md:px-8">
@@ -22,21 +26,41 @@ const Navbar = () => {
 
           {/* Nav links */}
           <div className="flex items-center gap-4 ml-auto text-sm font-black">
-            {NAV_LINKS.map((item) => (
-              <NavLink key={item.path} to={item.path}>
-                {({ isActive }) => (
-                  <span
-                    className={`inline-flex items-center px-3 py-1.5 uppercase tracking-[0.18em] transition-all cursor-pointer ${
-                      isActive
-                        ? "bg-primary text-primary-foreground neo-border neo-shadow-sm"
-                        : "text-foreground hover:opacity-80"
-                    }`}
-                  >
-                    {item.label}
-                  </span>
-                )}
-              </NavLink>
-            ))}
+            {NAV_LINKS.map((item) => {
+              if (item.path === "/profile") {
+                return (
+                  <NavLink key={item.path} to={item.path}>
+                    {({ isActive }) => (
+                      <span
+                        className={`inline-flex items-center justify-center w-10 h-10 transition-all cursor-pointer bg-primary text-primary-foreground neo-border neo-shadow-sm hover:-translate-y-0.5 overflow-hidden`}
+                      >
+                        {profile?.avatar_url ? (
+                          <img src={profile.avatar_url} alt="avatar" className="w-full h-full object-cover" />
+                        ) : (
+                          <User className="w-5 h-5" />
+                        )}
+                      </span>
+                    )}
+                  </NavLink>
+                );
+              }
+
+              return (
+                <NavLink key={item.path} to={item.path}>
+                  {({ isActive }) => (
+                    <span
+                      className={`inline-flex items-center px-3 py-1.5 uppercase transition-all cursor-pointer ${
+                        isActive
+                          ? "text-primary border-b-2 border-primary"
+                          : "text-foreground hover:opacity-80"
+                      }`}
+                    >
+                      {item.label}
+                    </span>
+                  )}
+                </NavLink>
+              );
+            })}
           </div>
 
         </div>

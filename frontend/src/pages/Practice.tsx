@@ -8,6 +8,7 @@ import { useProgress } from "@/hooks/useProgress";
 import { lessonService } from "@/services/lessonService";
 import { useAchievementToast } from "@/hooks/useAchievementToast";
 import { useUser } from "@/contexts/UserContext";
+import Navbar from "@/components/Navbar";
 
 const DEMO_SUBTITLE = "Xin chào, tôi là Minh. Rất vui được gặp bạn!";
 const DEMO_SUBTITLE_EN = "(Hello, I am Minh. Very nice to meet you!)";
@@ -189,47 +190,27 @@ const Practice = () => {
 
   return (
     <div className="min-h-screen pb-20 bg-background">
-      {/* Map-style header (giữ nguyên khi vào bài học) */}
-      <header className="sticky top-0 z-50 w-full bg-card neo-border-b flex items-center justify-between px-4 md:px-10 h-16">
-        <button
-          onClick={() => navigate("/roadmap")}
-          className="flex items-center gap-3 hover:opacity-80 transition-opacity"
-        >
-          <div className="bg-primary neo-border neo-shadow-sm w-10 h-10 flex items-center justify-center">
-            <span className="text-xl font-black text-primary-foreground">T</span>
-          </div>
-          <h1 className="text-xl font-black uppercase tracking-tighter">Talki Map</h1>
-        </button>
+      <Navbar />
 
-        <div className="flex items-center gap-2">
-          {/* Lịch sử */}
-          <button
-            onClick={() => navigate("/history")}
-            className="flex items-center gap-1.5 bg-muted neo-border neo-shadow-sm px-3 py-1 hover:opacity-80 transition-opacity"
-          >
-            <History className="w-4 h-4" />
-            <span className="hidden sm:inline font-black text-xs uppercase tracking-wide">Lịch sử</span>
-          </button>
-          {/* Energy */}
-          <div className="flex items-center gap-1.5 bg-yellow-400 neo-border neo-shadow-sm px-3 py-1">
-            <Zap className="w-4 h-4 fill-black text-black" />
-            <span className="font-black text-sm text-black">{hearts}/20</span>
+      {/* ── Sub Header (Energy, Stars) ── */}
+      <div className="sticky top-16 z-40 w-full pointer-events-none">
+        <div className="container mx-auto px-4 md:px-8">
+          <div className="flex items-center justify-end h-14 gap-3 py-2">
+            {/* Energy */}
+            <div className="flex items-center gap-1.5 bg-yellow-400 neo-border neo-shadow-sm px-3 py-1 pointer-events-auto">
+              <Zap className="w-4 h-4 fill-black text-black" />
+              <span className="font-black text-sm text-black">{hearts}/20</span>
+            </div>
+            {/* Points */}
+            <div className="hidden sm:flex items-center gap-1.5 bg-primary neo-border neo-shadow-sm px-3 py-1 pointer-events-auto">
+              <Star className="w-4 h-4 fill-white text-white" />
+              <span className="font-black text-sm text-white">{stars}</span>
+            </div>
           </div>
-          {/* Avatar */}
-          <button
-            onClick={() => navigate("/profile")}
-            className="w-10 h-10 neo-border neo-shadow-sm bg-muted flex items-center justify-center overflow-hidden hover:opacity-80 transition-opacity"
-          >
-            {profile?.avatar_url ? (
-              <img src={profile.avatar_url} alt="avatar" className="w-full h-full object-cover" />
-            ) : (
-              <User className="w-5 h-5" />
-            )}
-          </button>
         </div>
-      </header>
+      </div>
 
-      <div className="container mx-auto px-4 pt-8 max-w-4xl">
+      <div className="container mx-auto px-4 pt-10 max-w-4xl">
         {/* Header bài học */}
         <div className="flex items-center gap-4 mb-8">
           <Button variant="outline" size="icon" onClick={() => navigate("/roadmap")}>
