@@ -713,6 +713,7 @@ async def update_payment_config(
         setattr(config, field, value)
 
     await db.flush()
+    await db.refresh(config)
     return AdminManualPaymentConfigOut(
         qr_image_url=config.qr_image_url,
         bank_name=config.bank_name,

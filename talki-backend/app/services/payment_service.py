@@ -37,6 +37,8 @@ async def get_or_create_manual_config(db: AsyncSession) -> ManualPaymentConfig:
     config = ManualPaymentConfig(id=1, transfer_prefix="TALKI")
     db.add(config)
     await db.flush()
+    # Load server-side defaults (e.g., updated_at) in async context to avoid lazy-load later.
+    await db.refresh(config)
     return config
 
 

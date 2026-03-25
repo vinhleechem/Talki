@@ -149,8 +149,49 @@ export interface AdminPayment {
   plan: string;
   amount_vnd: number;
   status: string;
+  transfer_note: string | null;
+  admin_note: string | null;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
   created_at: string;
   paid_at: string | null;
+}
+
+export interface AdminPaymentConfig {
+  qr_image_url: string | null;
+  bank_name: string | null;
+  account_number: string | null;
+  account_name: string | null;
+  transfer_prefix: string;
+  instructions: string | null;
+  updated_at: string | null;
+}
+
+export type PaymentPlan = "monthly" | "yearly";
+
+export interface ManualPaymentConfig {
+  qr_image_url: string | null;
+  bank_name: string | null;
+  account_number: string | null;
+  account_name: string | null;
+  transfer_prefix: string;
+  instructions: string | null;
+}
+
+export interface ManualPaymentOrder {
+  id: string;
+  plan: string;
+  amount_vnd: number;
+  status: string;
+  transfer_note: string | null;
+  expires_at: string;
+  created_at: string;
+  paid_at: string | null;
+  qr_image_url: string | null;
+  bank_name: string | null;
+  account_number: string | null;
+  account_name: string | null;
+  instructions: string | null;
 }
 
 export interface AdminAchievement {
