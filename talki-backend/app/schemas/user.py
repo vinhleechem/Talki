@@ -11,6 +11,8 @@ class UserPublic(BaseModel):
     avatar_url: str | None
     hearts: int
     is_premium: bool
+    plan: str
+    plan_expires_at: datetime | None
     role: str
     created_at: datetime
 

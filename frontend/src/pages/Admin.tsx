@@ -3900,6 +3900,8 @@ function PaymentsPage() {
       const matchesText =
         !q ||
         p.user_id.toLowerCase().includes(q) ||
+        p.user_name.toLowerCase().includes(q) ||
+        p.user_email.toLowerCase().includes(q) ||
         p.plan.toLowerCase().includes(q) ||
         p.status.toLowerCase().includes(q) ||
         p.amount_vnd.toString().includes(q);
@@ -4060,7 +4062,7 @@ function PaymentsPage() {
                 className="bg-slate-100 text-xs font-black uppercase tracking-wider"
                 style={{ borderBottom: "3px solid black" }}
               >
-                <th className="px-4 py-3">User ID</th>
+                <th className="px-4 py-3">Người dùng</th>
                 <th className="px-4 py-3">Gói</th>
                 <th className="px-4 py-3">Số tiền</th>
                 <th className="px-4 py-3">Trạng thái</th>
@@ -4078,8 +4080,9 @@ function PaymentsPage() {
                   className="hover:bg-orange-50"
                   style={{ borderBottom: "1px solid rgba(0,0,0,0.08)" }}
                 >
-                  <td className="px-4 py-3 text-xs text-slate-500 font-mono">
-                    {p.user_id.slice(0, 8)}…
+                  <td className="px-4 py-3 text-xs min-w-[120px]">
+                    <p className="font-bold text-slate-800">{p.user_name}</p>
+                    <p className="text-slate-500">{p.user_email}</p>
                   </td>
                   <td className="px-4 py-3 font-bold uppercase text-sm">
                     {p.plan}

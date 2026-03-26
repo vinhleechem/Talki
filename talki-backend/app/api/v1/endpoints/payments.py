@@ -120,6 +120,41 @@ async def create_manual_payment_order(
     )
 
 
+@router.post("/orders/{order_id}/confirm", response_model=ManualPaymentOrderOut)
+async def confirm_manual_payment_order(
+    order_id: uuid.UUID,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        order = await payment_service.confirm_manual_payment_order(
+            db,
+            uuid.UUID(user_id),
+            order_id,
+        )
+    except ValueError as e:
+        detail = str(e)
+        status_code = 404 if detail == "Payment order not found" else 400
+        raise HTTPException(status_code=status_code, detail=detail)
+
+    config = await payment_service.get_or_create_manual_config(db)
+    return ManualPaymentOrderOut(
+        id=order.id,
+        plan=order.plan,
+        amount_vnd=order.amount_vnd,
+        status=order.status,
+        transfer_note=order.transfer_note,
+        expires_at=order.expires_at,
+        created_at=order.created_at,
+        paid_at=order.paid_at,
+        qr_image_url=config.qr_image_url,
+        bank_name=config.bank_name,
+        account_number=config.account_number,
+        account_name=config.account_name,
+        instructions=config.instructions,
+    )
+
+
 @router.get("/my-orders", response_model=list[ManualPaymentOrderOut])
 async def list_my_orders(
     user_id: str = Depends(get_current_user_id),

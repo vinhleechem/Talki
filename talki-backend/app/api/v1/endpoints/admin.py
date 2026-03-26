@@ -198,6 +198,8 @@ class AchievementUpdate(BaseModel):
 class AdminPaymentOut(BaseModel):
     id: uuid.UUID
     user_id: uuid.UUID
+    user_email: str
+    user_name: str
     plan: str
     amount_vnd: int
     status: str
@@ -672,9 +674,33 @@ async def list_payments(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(PaymentOrder).order_by(PaymentOrder.created_at.desc()).offset(skip).limit(limit)
+        select(PaymentOrder)
+        .where(PaymentOrder.status != "created")
+        .order_by(PaymentOrder.created_at.desc())
+        .offset(skip)
+        .limit(limit)
     )
-    return result.scalars().all()
+    orders = result.scalars().all()
+    
+    out = []
+    for order in orders:
+        user = await db.get(User, order.user_id)
+        out.append(AdminPaymentOut(
+            id=order.id,
+            user_id=order.user_id,
+            user_email=user.email if user else "Unknown",
+            user_name=user.display_name if user else "Unknown",
+            plan=order.plan,
+            amount_vnd=order.amount_vnd,
+            status=order.status,
+            transfer_note=order.transfer_note,
+            admin_note=order.admin_note,
+            reviewed_at=order.reviewed_at,
+            reviewed_by=order.reviewed_by,
+            created_at=order.created_at,
+            paid_at=order.paid_at,
+        ))
+    return out
 
 
 @router.get("/payment-config", response_model=AdminManualPaymentConfigOut)
@@ -740,7 +766,22 @@ async def review_payment(
             body.status,
             body.admin_note,
         )
-        return order
+        user = await db.get(User, order.user_id)
+        return AdminPaymentOut(
+            id=order.id,
+            user_id=order.user_id,
+            user_email=user.email if user else "Unknown",
+            user_name=user.display_name if user else "Unknown",
+            plan=order.plan,
+            amount_vnd=order.amount_vnd,
+            status=order.status,
+            transfer_note=order.transfer_note,
+            admin_note=order.admin_note,
+            reviewed_at=order.reviewed_at,
+            reviewed_by=order.reviewed_by,
+            created_at=order.created_at,
+            paid_at=order.paid_at,
+        )
     except ValueError as e:
         detail = str(e)
         status_code = 404 if detail == "Payment order not found" else 400

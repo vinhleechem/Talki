@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Crown, CheckCircle2, Copy, RefreshCw } from "lucide-react";
@@ -8,7 +8,7 @@ import { paymentApi } from "@/services/paymentService";
 import type { ManualPaymentOrder, PaymentPlan } from "@/types";
 
 type RoutePlan = "monthly" | "annual" | "yearly";
-type PaymentStatus = "pending" | "paid" | "failed" | "cancelled";
+type PaymentStatus = "created" | "pending" | "paid" | "failed" | "cancelled";
 
 const Payment = () => {
   const navigate = useNavigate();
@@ -20,6 +20,7 @@ const Payment = () => {
 
   const [loading, setLoading] = useState(true);
   const [creatingOrder, setCreatingOrder] = useState(false);
+  const [confirmingOrder, setConfirmingOrder] = useState(false);
   const [refreshingOrders, setRefreshingOrders] = useState(false);
   const [activeOrder, setActiveOrder] = useState<ManualPaymentOrder | null>(
     null,
@@ -51,6 +52,7 @@ const Payment = () => {
   const currentPlan = planDetails[normalizedPlan];
 
   const statusLabel: Record<PaymentStatus, string> = {
+    created: "Mới tạo",
     pending: "Chờ duyệt",
     paid: "Đã duyệt",
     failed: "Thất bại",
@@ -58,29 +60,42 @@ const Payment = () => {
   };
 
   const statusClass: Record<PaymentStatus, string> = {
+    created: "bg-blue-100 text-blue-800",
     pending: "bg-yellow-100 text-yellow-800",
     paid: "bg-green-100 text-green-800",
     failed: "bg-red-100 text-red-800",
     cancelled: "bg-slate-100 text-slate-700",
   };
 
-  async function loadOrders(showLoading = false) {
-    if (showLoading) setRefreshingOrders(true);
-    try {
-      const orderList = await paymentApi.listMyOrders();
-      setOrders(orderList);
-      const pending = orderList.find((o) => o.status === "pending");
-      setActiveOrder((prev) => prev ?? pending ?? orderList[0] ?? null);
-    } catch (error) {
-      toast({
-        title: "Không tải được đơn thanh toán",
-        description: error instanceof Error ? error.message : String(error),
-        variant: "destructive",
-      });
-    } finally {
-      if (showLoading) setRefreshingOrders(false);
-    }
-  }
+  const inProgressOrder = useMemo(
+    () =>
+      orders.find((o) => o.status === "created" || o.status === "pending") ??
+      null,
+    [orders],
+  );
+
+  const loadOrders = useCallback(
+    async (showLoading = false) => {
+      if (showLoading) setRefreshingOrders(true);
+      try {
+        const orderList = await paymentApi.listMyOrders();
+        setOrders(orderList);
+        const inProgress = orderList.find(
+          (o) => o.status === "created" || o.status === "pending",
+        );
+        setActiveOrder((prev) => prev ?? inProgress ?? null);
+      } catch (error) {
+        toast({
+          title: "Không tải được đơn thanh toán",
+          description: error instanceof Error ? error.message : String(error),
+          variant: "destructive",
+        });
+      } finally {
+        if (showLoading) setRefreshingOrders(false);
+      }
+    },
+    [toast],
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -89,8 +104,10 @@ const Payment = () => {
         const orderList = await paymentApi.listMyOrders();
         if (!mounted) return;
         setOrders(orderList);
-        const pending = orderList.find((o) => o.status === "pending");
-        setActiveOrder(pending ?? orderList[0] ?? null);
+        const inProgress = orderList.find(
+          (o) => o.status === "created" || o.status === "pending",
+        );
+        setActiveOrder(inProgress ?? null);
       } catch (error) {
         if (!mounted) return;
         toast({
@@ -108,9 +125,18 @@ const Payment = () => {
     };
   }, [toast]);
 
+  useEffect(() => {
+    if (!inProgressOrder || inProgressOrder.status !== "pending") return;
+    const intervalId = window.setInterval(() => {
+      loadOrders(false);
+    }, 15000);
+    return () => window.clearInterval(intervalId);
+  }, [inProgressOrder, loadOrders]);
+
   const handleCreateOrder = async () => {
     setCreatingOrder(true);
     try {
+      const existingIds = new Set(orders.map((o) => o.id));
       const created = await paymentApi.createOrder(normalizedPlan);
       setActiveOrder(created);
       setOrders((prev) => [
@@ -118,9 +144,12 @@ const Payment = () => {
         ...prev.filter((o) => o.id !== created.id),
       ]);
       toast({
-        title: "Đã tạo đơn thanh toán",
-        description:
-          "Vui lòng chuyển khoản đúng nội dung để admin duyệt nhanh hơn.",
+        title: existingIds.has(created.id)
+          ? "Đang dùng đơn hiện có"
+          : "Đã tạo đơn thanh toán",
+        description: existingIds.has(created.id)
+          ? "Bạn đã có đơn đang xử lý. Hoàn tất chuyển khoản rồi bấm xác nhận thanh toán."
+          : "Vui lòng chuyển khoản đúng nội dung để admin duyệt nhanh hơn.",
       });
     } catch (error) {
       toast({
@@ -133,12 +162,29 @@ const Payment = () => {
     }
   };
 
-  const handleConfirmPayment = async () => {
-    await loadOrders(true);
-    toast({
-      title: "Đã ghi nhận yêu cầu",
-      description: "Hệ thống sẽ cập nhật khi admin duyệt giao dịch của bạn.",
-    });
+  const handleConfirmPaid = async () => {
+    if (!activeOrder || activeOrder.status !== "created") return;
+    setConfirmingOrder(true);
+    try {
+      const confirmed = await paymentApi.confirmOrder(activeOrder.id);
+      setActiveOrder(confirmed);
+      setOrders((prev) => [
+        confirmed,
+        ...prev.filter((o) => o.id !== confirmed.id),
+      ]);
+      toast({
+        title: "Đã gửi xác nhận thanh toán",
+        description: "Đơn đã được chuyển sang hàng chờ admin duyệt.",
+      });
+    } catch (error) {
+      toast({
+        title: "Xác nhận thanh toán thất bại",
+        description: error instanceof Error ? error.message : String(error),
+        variant: "destructive",
+      });
+    } finally {
+      setConfirmingOrder(false);
+    }
   };
 
   const copyText = async (text?: string | null) => {
@@ -150,6 +196,32 @@ const Payment = () => {
       toast({ title: "Không thể sao chép", variant: "destructive" });
     }
   };
+
+  const qrUrl = useMemo(() => {
+    if (!activeOrder) return null;
+    let base = activeOrder.qr_image_url;
+    if (!base && activeOrder.bank_name && activeOrder.account_number) {
+        base = `https://img.vietqr.io/image/${activeOrder.bank_name.trim()}-${activeOrder.account_number.trim()}-compact2.png`;
+    }
+    if (!base) return null;
+
+    if (base.includes("img.vietqr.io")) {
+        try {
+            const url = new URL(base);
+            url.searchParams.set("amount", activeOrder.amount_vnd.toString());
+            if (activeOrder.transfer_note) {
+                url.searchParams.set("addInfo", activeOrder.transfer_note);
+            }
+            if (activeOrder.account_name) {
+                url.searchParams.set("accountName", activeOrder.account_name);
+            }
+            return url.toString();
+        } catch {
+            return base;
+        }
+    }
+    return base;
+  }, [activeOrder]);
 
   if (loading) {
     return (
@@ -244,16 +316,20 @@ const Payment = () => {
             </Button>
           </div>
           <p className="text-sm text-muted-foreground mt-2 mb-4">
-            Mỗi lần nâng cấp sẽ tạo một mã nội dung chuyển khoản riêng để đối
-            soát tự động.
+            Bấm tạo đơn để lấy mã chuyển khoản. Chỉ khi bạn bấm xác nhận thanh
+            toán thì đơn mới được chuyển qua admin duyệt.
           </p>
           <Button
             onClick={handleCreateOrder}
             className="w-full"
             variant="secondary"
-            disabled={creatingOrder}
+            disabled={creatingOrder || !!inProgressOrder}
           >
-            {creatingOrder ? "Đang tạo đơn..." : `Tạo đơn ${currentPlan.name}`}
+            {creatingOrder
+              ? "Đang tạo đơn..."
+              : inProgressOrder
+                ? "Đã có đơn đang xử lý"
+                : `Tạo đơn ${currentPlan.name}`}
           </Button>
         </div>
 
@@ -265,11 +341,11 @@ const Payment = () => {
 
             <div className="flex flex-col items-center">
               <div className="w-64 h-64 bg-muted neo-border rounded-sm flex items-center justify-center mb-4 overflow-hidden">
-                {activeOrder.qr_image_url ? (
+                {qrUrl ? (
                   <img
-                    src={activeOrder.qr_image_url}
+                    src={qrUrl}
                     alt="QR chuyển khoản"
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-contain p-2"
                   />
                 ) : (
                   <p className="text-xs font-bold text-muted-foreground px-4 text-center">
@@ -319,15 +395,32 @@ const Payment = () => {
                     {activeOrder.instructions}
                   </p>
                 )}
+                {activeOrder.status === "pending" && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Trạng thái sẽ tự cập nhật mỗi 15 giây khi đơn đang chờ
+                    duyệt.
+                  </p>
+                )}
               </div>
 
-              <Button
-                onClick={handleConfirmPayment}
-                className="w-full max-w-xs"
-                variant="secondary"
-              >
-                Tôi đã chuyển khoản
-              </Button>
+              {activeOrder.status === "created" && (
+                <Button
+                  onClick={handleConfirmPaid}
+                  className="w-full max-w-xs"
+                  variant="secondary"
+                  disabled={confirmingOrder}
+                >
+                  {confirmingOrder
+                    ? "Đang xác nhận..."
+                    : "Xác nhận đã thanh toán"}
+                </Button>
+              )}
+
+              {activeOrder.status === "pending" && (
+                <p className="text-sm font-bold text-yellow-700">
+                  Đơn đang chờ admin duyệt.
+                </p>
+              )}
             </div>
           </div>
         )}

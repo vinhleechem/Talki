@@ -12,5 +12,9 @@ export const paymentApi = {
       method: "POST",
       body: JSON.stringify({ plan }),
     }),
+  confirmOrder: (orderId: string) =>
+    apiFetch<ManualPaymentOrder>(`/payments/orders/${orderId}/confirm`, {
+      method: "POST",
+    }),
   listMyOrders: () => apiFetch<ManualPaymentOrder[]>("/payments/my-orders"),
 };
