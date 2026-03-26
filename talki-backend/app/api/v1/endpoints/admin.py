@@ -221,6 +221,8 @@ class AdminManualPaymentConfigOut(BaseModel):
     account_name: Optional[str]
     transfer_prefix: str
     instructions: Optional[str]
+    monthly_price: int
+    yearly_price: int
     updated_at: Optional[datetime]
 
 
@@ -231,6 +233,8 @@ class AdminManualPaymentConfigUpdate(BaseModel):
     account_name: Optional[str] = None
     transfer_prefix: Optional[str] = None
     instructions: Optional[str] = None
+    monthly_price: Optional[int] = None
+    yearly_price: Optional[int] = None
 
 
 class AdminPaymentReviewRequest(BaseModel):
@@ -716,6 +720,8 @@ async def get_payment_config(
         account_name=config.account_name,
         transfer_prefix=config.transfer_prefix,
         instructions=config.instructions,
+        monthly_price=config.monthly_price,
+        yearly_price=config.yearly_price,
         updated_at=config.updated_at,
     )
 
@@ -747,6 +753,8 @@ async def update_payment_config(
         account_name=config.account_name,
         transfer_prefix=config.transfer_prefix,
         instructions=config.instructions,
+        monthly_price=config.monthly_price,
+        yearly_price=config.yearly_price,
         updated_at=config.updated_at,
     )
 

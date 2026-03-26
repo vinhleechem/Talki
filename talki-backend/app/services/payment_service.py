@@ -7,11 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.payment import ManualPaymentConfig, PaymentOrder, Subscription
 from app.models.user import User
 
-PLAN_PRICES = {
-    "monthly": 99000,
-    "yearly": 999000
-}
-
 PLAN_DURATIONS = {
     "monthly": timedelta(days=30),
     "yearly": timedelta(days=365)
@@ -19,7 +14,7 @@ PLAN_DURATIONS = {
 
 def validate_plan(plan: str) -> str:
     """Validate subscription plan name used by payment flows."""
-    if plan not in PLAN_PRICES:
+    if plan not in ["monthly", "yearly"]:
         raise ValueError(f"Invalid plan: {plan}")
     return plan
 
@@ -66,7 +61,7 @@ async def create_manual_payment_order(
     # Idempotent behavior: only one active in-progress order per user at a time.
     if existing_in_progress is not None:
         existing_in_progress.plan = plan
-        existing_in_progress.amount_vnd = PLAN_PRICES[plan]
+        existing_in_progress.amount_vnd = config.yearly_price if plan == "yearly" else config.monthly_price
         existing_in_progress.expires_at = now + timedelta(days=2)
         if not existing_in_progress.transfer_note:
             existing_in_progress.transfer_note = build_transfer_note(config.transfer_prefix, existing_in_progress.id)
@@ -76,7 +71,7 @@ async def create_manual_payment_order(
     order = PaymentOrder(
         user_id=user_id,
         plan=plan,
-        amount_vnd=PLAN_PRICES[plan],
+        amount_vnd=config.yearly_price if plan == "yearly" else config.monthly_price,
         status="created",
         expires_at=now + timedelta(days=2),
     )

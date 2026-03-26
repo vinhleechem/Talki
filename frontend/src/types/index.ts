@@ -168,6 +168,8 @@ export interface AdminPaymentConfig {
   account_name: string | null;
   transfer_prefix: string;
   instructions: string | null;
+  monthly_price: number;
+  yearly_price: number;
   updated_at: string | null;
 }
 
@@ -176,10 +178,11 @@ export type PaymentPlan = "monthly" | "yearly";
 export interface ManualPaymentConfig {
   qr_image_url: string | null;
   bank_name: string | null;
-  account_number: string | null;
   account_name: string | null;
   transfer_prefix: string;
   instructions: string | null;
+  monthly_price: number;
+  yearly_price: number;
 }
 
 export interface ManualPaymentOrder {

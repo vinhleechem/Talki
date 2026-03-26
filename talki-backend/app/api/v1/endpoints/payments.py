@@ -24,6 +24,8 @@ class ManualPaymentConfigOut(BaseModel):
     account_name: str | None
     transfer_prefix: str
     instructions: str | None
+    monthly_price: int
+    yearly_price: int
 
 
 class ManualPaymentOrderOut(BaseModel):
@@ -85,6 +87,8 @@ async def get_manual_payment_config(
         account_name=config.account_name,
         transfer_prefix=config.transfer_prefix,
         instructions=config.instructions,
+        monthly_price=config.monthly_price,
+        yearly_price=config.yearly_price,
     )
 
 

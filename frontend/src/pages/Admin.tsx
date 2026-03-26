@@ -3810,6 +3810,8 @@ function PaymentsPage() {
     account_name: "",
     transfer_prefix: "TALKI",
     instructions: "",
+    monthly_price: 99000,
+    yearly_price: 999000,
   });
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
   const [savingConfig, setSavingConfig] = useState(false);
@@ -3837,6 +3839,8 @@ function PaymentsPage() {
         account_name: config.account_name ?? "",
         transfer_prefix: config.transfer_prefix || "TALKI",
         instructions: config.instructions ?? "",
+        monthly_price: config.monthly_price ?? 99000,
+        yearly_price: config.yearly_price ?? 999000,
       });
     } catch (err) {
       handleError(err);
@@ -3857,6 +3861,8 @@ function PaymentsPage() {
         account_name: configForm.account_name || null,
         transfer_prefix: configForm.transfer_prefix,
         instructions: configForm.instructions || null,
+        monthly_price: configForm.monthly_price,
+        yearly_price: configForm.yearly_price,
       });
       setPaymentConfig(updated);
       toast({ title: "Đã lưu cấu hình thanh toán" });
@@ -3991,6 +3997,32 @@ function PaymentsPage() {
               setConfigForm((prev) => ({
                 ...prev,
                 instructions: e.target.value,
+              }))
+            }
+          />
+          <input
+            type="number"
+            className="px-3 py-2 text-sm font-bold focus:outline-none"
+            style={{ border: "2px solid black" }}
+            placeholder="Giá gói Tháng (VNĐ)"
+            value={configForm.monthly_price}
+            onChange={(e) =>
+              setConfigForm((prev) => ({
+                ...prev,
+                monthly_price: parseInt(e.target.value) || 0,
+              }))
+            }
+          />
+          <input
+            type="number"
+            className="px-3 py-2 text-sm font-bold focus:outline-none"
+            style={{ border: "2px solid black" }}
+            placeholder="Giá gói Năm (VNĐ)"
+            value={configForm.yearly_price}
+            onChange={(e) =>
+              setConfigForm((prev) => ({
+                ...prev,
+                yearly_price: parseInt(e.target.value) || 0,
               }))
             }
           />

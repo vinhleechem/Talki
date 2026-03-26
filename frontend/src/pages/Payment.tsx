@@ -5,7 +5,11 @@ import { ArrowLeft, Crown, CheckCircle2, Copy, RefreshCw } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { useToast } from "@/components/ui/use-toast";
 import { paymentApi } from "@/services/paymentService";
-import type { ManualPaymentOrder, PaymentPlan } from "@/types";
+import type {
+  ManualPaymentConfig,
+  ManualPaymentOrder,
+  PaymentPlan,
+} from "@/types";
 
 type RoutePlan = "monthly" | "annual" | "yearly";
 type PaymentStatus = "created" | "pending" | "paid" | "failed" | "cancelled";
@@ -26,6 +30,7 @@ const Payment = () => {
     null,
   );
   const [orders, setOrders] = useState<ManualPaymentOrder[]>([]);
+  const [paymentConfig, setPaymentConfig] = useState<ManualPaymentConfig | null>(null);
 
   const normalizedPlan = useMemo<PaymentPlan>(() => {
     if (plan === "annual") return "yearly";
@@ -39,12 +44,12 @@ const Payment = () => {
   > = {
     monthly: {
       name: "Gói Tháng",
-      price: "99,000đ",
+      price: paymentConfig ? `${paymentConfig.monthly_price.toLocaleString()}đ` : "99,000đ",
       duration: "/tháng",
     },
     yearly: {
       name: "Gói Năm",
-      price: "999,000đ",
+      price: paymentConfig ? `${paymentConfig.yearly_price.toLocaleString()}đ` : "999,000đ",
       duration: "/năm",
     },
   };
@@ -101,8 +106,12 @@ const Payment = () => {
     let mounted = true;
     async function bootstrap() {
       try {
-        const orderList = await paymentApi.listMyOrders();
+        const [config, orderList] = await Promise.all([
+          paymentApi.getConfig(),
+          paymentApi.listMyOrders(),
+        ]);
         if (!mounted) return;
+        setPaymentConfig(config);
         setOrders(orderList);
         const inProgress = orderList.find(
           (o) => o.status === "created" || o.status === "pending",

@@ -18,6 +18,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useProgress } from "@/hooks/useProgress";
 import { useToast } from "@/components/ui/use-toast";
 import { useUser } from "@/contexts/UserContext";
+import { paymentApi } from "@/services/paymentService";
+import type { ManualPaymentConfig } from "@/types";
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -27,6 +29,11 @@ const Profile = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [userName, setUserName] = useState("");
   const [email, setEmail] = useState("");
+  const [paymentConfig, setPaymentConfig] = useState<ManualPaymentConfig | null>(null);
+
+  useEffect(() => {
+    paymentApi.getConfig().then(setPaymentConfig).catch(console.error);
+  }, []);
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -91,6 +98,11 @@ const Profile = () => {
     : isYearly
       ? "Gói Năm"
       : "Miễn Phí";
+
+  const monthlyPrice = paymentConfig?.monthly_price ?? 99000;
+  const yearlyPrice = paymentConfig?.yearly_price ?? 999000;
+  const savings = Math.max(0, monthlyPrice * 12 - yearlyPrice);
+  const savingsPercent = monthlyPrice > 0 ? Math.round((savings / (monthlyPrice * 12)) * 100) : 17;
 
   return (
     <div className="min-h-screen pb-20">
@@ -275,7 +287,7 @@ const Profile = () => {
                 </div>
                 <div>
                   <div className="text-2xl font-black text-foreground">
-                    99,000đ
+                    {monthlyPrice.toLocaleString()}đ
                   </div>
                   <div className="text-xs text-muted-foreground text-right">
                     /tháng
@@ -315,7 +327,7 @@ const Profile = () => {
             {/* Annual Plan */}
             <div className="bg-secondary/10 neo-border border-secondary rounded-sm p-6 relative">
               <div className="absolute top-2 right-2 bg-secondary text-secondary-foreground text-xs font-black px-3 py-1 rounded-sm">
-                TIẾT KIỆM 17%
+                TIẾT KIỆM {savingsPercent}%
               </div>
               <div className="flex items-start justify-between mb-4">
                 <div>
@@ -328,7 +340,7 @@ const Profile = () => {
                 </div>
                 <div>
                   <div className="text-2xl font-black text-foreground">
-                    999,000đ
+                    {yearlyPrice.toLocaleString()}đ
                   </div>
                   <div className="text-xs text-muted-foreground text-right">
                     /năm
@@ -342,7 +354,7 @@ const Profile = () => {
                 </li>
                 <li className="flex items-center gap-2 text-sm">
                   <Zap className="w-4 h-4 text-secondary" />
-                  <span className="font-bold">Tiết kiệm 200,000đ/năm</span>
+                  <span className="font-bold">Tiết kiệm {savings.toLocaleString()}đ/năm</span>
                 </li>
                 <li className="flex items-center gap-2 text-sm">
                   <Zap className="w-4 h-4 text-secondary" />
