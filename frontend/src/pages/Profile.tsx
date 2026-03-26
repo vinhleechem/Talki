@@ -2,42 +2,73 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { User, Mail, Calendar, LogOut, Edit2, Crown, Zap, Star, History } from "lucide-react";
+import {
+  User,
+  Mail,
+  Calendar,
+  LogOut,
+  Edit2,
+  Crown,
+  Zap,
+  Star,
+  History,
+} from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { supabase } from "@/integrations/supabase/client";
 import { useProgress } from "@/hooks/useProgress";
 import { useToast } from "@/components/ui/use-toast";
+import { useUser } from "@/contexts/UserContext";
+import { paymentApi } from "@/services/paymentService";
+import type { ManualPaymentConfig } from "@/types";
 
 const Profile = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { progress } = useProgress();
+  const { profile, refresh } = useUser();
   const [isEditing, setIsEditing] = useState(false);
   const [userName, setUserName] = useState("");
   const [email, setEmail] = useState("");
+  const [paymentConfig, setPaymentConfig] = useState<ManualPaymentConfig | null>(null);
+
+  useEffect(() => {
+    paymentApi.getConfig().then(setPaymentConfig).catch(console.error);
+  }, []);
 
   useEffect(() => {
     const fetchUserData = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      await refresh();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (user) {
         setUserName(user.user_metadata?.name || "User");
         setEmail(user.email || "");
       }
     };
     fetchUserData();
-  }, []);
+  }, [refresh]);
+
+  useEffect(() => {
+    if (profile?.display_name) {
+      setUserName(profile.display_name);
+    }
+    if (profile?.email) {
+      setEmail(profile.email);
+    }
+  }, [profile]);
 
   const handleSave = async () => {
     try {
       const { error } = await supabase.auth.updateUser({
-        data: { name: userName }
+        data: { name: userName },
       });
 
       if (error) throw error;
 
       localStorage.setItem("userName", userName);
       setIsEditing(false);
-      
+
       toast({
         title: "Profile updated!",
         description: "Your name has been saved.",
@@ -57,7 +88,21 @@ const Profile = () => {
     navigate("/");
   };
 
-  const completedScenes = progress.filter(p => p.completed).length;
+  const completedScenes = progress.filter((p) => p.completed).length;
+  const currentPlan = profile?.plan ?? "free";
+  const isMonthly = currentPlan === "monthly";
+  const isYearly = currentPlan === "yearly";
+  const isFree = currentPlan === "free";
+  const currentPlanLabel = isMonthly
+    ? "Gói Tháng"
+    : isYearly
+      ? "Gói Năm"
+      : "Miễn Phí";
+
+  const monthlyPrice = paymentConfig?.monthly_price ?? 99000;
+  const yearlyPrice = paymentConfig?.yearly_price ?? 999000;
+  const savings = Math.max(0, monthlyPrice * 12 - yearlyPrice);
+  const savingsPercent = monthlyPrice > 0 ? Math.round((savings / (monthlyPrice * 12)) * 100) : 17;
 
   return (
     <div className="min-h-screen pb-20">
@@ -72,7 +117,9 @@ const Profile = () => {
               <User className="w-12 h-12 text-primary-foreground" />
             </div>
             <h1 className="text-2xl font-black text-foreground">{userName}</h1>
-            <p className="text-sm font-bold text-muted-foreground">Học viên Talki</p>
+            <p className="text-sm font-bold text-muted-foreground">
+              Học viên Talki
+            </p>
           </div>
 
           {/* Info */}
@@ -92,7 +139,9 @@ const Profile = () => {
                   <>
                     <User className="w-5 h-5 text-muted-foreground" />
                     <div className="flex-1">
-                      <p className="text-xs font-bold text-muted-foreground">Tên</p>
+                      <p className="text-xs font-bold text-muted-foreground">
+                        Tên
+                      </p>
                       <p className="font-bold text-foreground">{userName}</p>
                     </div>
                   </>
@@ -113,7 +162,9 @@ const Profile = () => {
               <div className="flex items-center gap-3">
                 <Mail className="w-5 h-5 text-muted-foreground" />
                 <div>
-                  <p className="text-xs font-bold text-muted-foreground">Email</p>
+                  <p className="text-xs font-bold text-muted-foreground">
+                    Email
+                  </p>
                   <p className="font-bold text-foreground">{email}</p>
                 </div>
               </div>
@@ -123,7 +174,9 @@ const Profile = () => {
               <div className="flex items-center gap-3">
                 <Calendar className="w-5 h-5 text-muted-foreground" />
                 <div>
-                  <p className="text-xs font-bold text-muted-foreground">Tham gia</p>
+                  <p className="text-xs font-bold text-muted-foreground">
+                    Tham gia
+                  </p>
                   <p className="font-bold text-foreground">Tháng 10, 2025</p>
                 </div>
               </div>
@@ -133,10 +186,18 @@ const Profile = () => {
           {/* Actions */}
           {isEditing && (
             <div className="flex gap-4 mt-6">
-              <Button variant="outline" onClick={() => setIsEditing(false)} className="flex-1">
+              <Button
+                variant="outline"
+                onClick={() => setIsEditing(false)}
+                className="flex-1"
+              >
                 Hủy
               </Button>
-              <Button variant="secondary" onClick={handleSave} className="flex-1">
+              <Button
+                variant="secondary"
+                onClick={handleSave}
+                className="flex-1"
+              >
                 Lưu thay đổi
               </Button>
             </div>
@@ -146,14 +207,20 @@ const Profile = () => {
         {/* Stats */}
         <div className="grid grid-cols-2 gap-4 mb-6">
           <div className="bg-card neo-border neo-shadow rounded-sm p-6 text-center">
-            <div className="text-3xl font-black text-primary mb-1">{completedScenes}</div>
-            <div className="text-sm font-bold text-muted-foreground">Scenes Completed</div>
+            <div className="text-3xl font-black text-primary mb-1">
+              {completedScenes}
+            </div>
+            <div className="text-sm font-bold text-muted-foreground">
+              Scenes Completed
+            </div>
           </div>
           <div className="bg-card neo-border neo-shadow rounded-sm p-6 text-center">
             <div className="text-3xl font-black text-secondary mb-1">
               {progress.reduce((sum, p) => sum + (p.stars || 0), 0)}
             </div>
-            <div className="text-sm font-bold text-muted-foreground">Total Stars</div>
+            <div className="text-sm font-bold text-muted-foreground">
+              Total Stars
+            </div>
           </div>
         </div>
 
@@ -163,15 +230,25 @@ const Profile = () => {
             <Crown className="w-6 h-6 text-primary" />
             Gói Học Tập
           </h2>
-          <p className="text-sm text-muted-foreground mb-6">Nâng cấp để mở khóa tất cả các giai đoạn và tính năng cao cấp</p>
+          <p className="text-sm font-bold text-foreground mb-2">
+            Gói hiện tại:{" "}
+            <span className="text-primary">{currentPlanLabel}</span>
+          </p>
+          <p className="text-sm text-muted-foreground mb-6">
+            Nâng cấp để mở khóa tất cả các giai đoạn và tính năng cao cấp
+          </p>
 
           <div className="space-y-4">
             {/* Free Plan */}
             <div className="bg-muted neo-border rounded-sm p-6">
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <h3 className="text-xl font-black text-foreground mb-1">Miễn Phí</h3>
-                  <p className="text-sm text-muted-foreground">Trải nghiệm cơ bản</p>
+                  <h3 className="text-xl font-black text-foreground mb-1">
+                    Miễn Phí
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Trải nghiệm cơ bản
+                  </p>
                 </div>
                 <div className="text-2xl font-black text-foreground">0đ</div>
               </div>
@@ -189,9 +266,9 @@ const Profile = () => {
                   <span>Theo dõi tiến độ</span>
                 </li>
               </ul>
-              <Button variant="outline" className="w-full" disabled>
-                Gói hiện tại
-              </Button>
+              <div className="w-full text-center text-xs font-bold text-muted-foreground py-2 border border-border rounded-sm">
+                Gói cơ bản mặc định
+              </div>
             </div>
 
             {/* Monthly Plan */}
@@ -201,12 +278,20 @@ const Profile = () => {
               </div>
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <h3 className="text-xl font-black text-foreground mb-1">Gói Tháng</h3>
-                  <p className="text-sm text-muted-foreground">Mở khóa toàn bộ</p>
+                  <h3 className="text-xl font-black text-foreground mb-1">
+                    Gói Tháng
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Mở khóa toàn bộ
+                  </p>
                 </div>
                 <div>
-                  <div className="text-2xl font-black text-foreground">99,000đ</div>
-                  <div className="text-xs text-muted-foreground text-right">/tháng</div>
+                  <div className="text-2xl font-black text-foreground">
+                    {monthlyPrice.toLocaleString()}đ
+                  </div>
+                  <div className="text-xs text-muted-foreground text-right">
+                    /tháng
+                  </div>
                 </div>
               </div>
               <ul className="space-y-2 mb-4">
@@ -227,28 +312,39 @@ const Profile = () => {
                   <span className="font-bold">Hỗ trợ ưu tiên</span>
                 </li>
               </ul>
-              <Button 
+              <Button
                 className="w-full bg-primary hover:bg-primary/90"
-                onClick={() => navigate("/payment", { state: { plan: "monthly" } })}
+                disabled={isMonthly}
+                onClick={() =>
+                  navigate("/payment", { state: { plan: "monthly" } })
+                }
               >
                 <Crown className="w-4 h-4 mr-2" />
-                Nâng cấp ngay
+                {isMonthly ? "Gói hiện tại" : "Nâng cấp ngay"}
               </Button>
             </div>
 
             {/* Annual Plan */}
             <div className="bg-secondary/10 neo-border border-secondary rounded-sm p-6 relative">
               <div className="absolute top-2 right-2 bg-secondary text-secondary-foreground text-xs font-black px-3 py-1 rounded-sm">
-                TIẾT KIỆM 17%
+                TIẾT KIỆM {savingsPercent}%
               </div>
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <h3 className="text-xl font-black text-foreground mb-1">Gói Năm</h3>
-                  <p className="text-sm text-muted-foreground">Tiết kiệm nhất</p>
+                  <h3 className="text-xl font-black text-foreground mb-1">
+                    Gói Năm
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Tiết kiệm nhất
+                  </p>
                 </div>
                 <div>
-                  <div className="text-2xl font-black text-foreground">999,000đ</div>
-                  <div className="text-xs text-muted-foreground text-right">/năm</div>
+                  <div className="text-2xl font-black text-foreground">
+                    {yearlyPrice.toLocaleString()}đ
+                  </div>
+                  <div className="text-xs text-muted-foreground text-right">
+                    /năm
+                  </div>
                 </div>
               </div>
               <ul className="space-y-2 mb-4">
@@ -258,7 +354,7 @@ const Profile = () => {
                 </li>
                 <li className="flex items-center gap-2 text-sm">
                   <Zap className="w-4 h-4 text-secondary" />
-                  <span className="font-bold">Tiết kiệm 200,000đ/năm</span>
+                  <span className="font-bold">Tiết kiệm {savings.toLocaleString()}đ/năm</span>
                 </li>
                 <li className="flex items-center gap-2 text-sm">
                   <Zap className="w-4 h-4 text-secondary" />
@@ -269,13 +365,16 @@ const Profile = () => {
                   <span className="font-bold">Cập nhật ưu tiên</span>
                 </li>
               </ul>
-              <Button 
-                variant="secondary" 
+              <Button
+                variant="secondary"
                 className="w-full"
-                onClick={() => navigate("/payment", { state: { plan: "annual" } })}
+                disabled={isYearly}
+                onClick={() =>
+                  navigate("/payment", { state: { plan: "annual" } })
+                }
               >
                 <Crown className="w-4 h-4 mr-2" />
-                Nâng cấp gói Năm
+                {isYearly ? "Gói hiện tại" : "Nâng cấp gói Năm"}
               </Button>
             </div>
           </div>
@@ -292,11 +391,7 @@ const Profile = () => {
         </Button>
 
         {/* Logout */}
-        <Button
-          variant="destructive"
-          onClick={handleLogout}
-          className="w-full"
-        >
+        <Button variant="destructive" onClick={handleLogout} className="w-full">
           <LogOut className="w-4 h-4 mr-2" />
           Đăng xuất
         </Button>

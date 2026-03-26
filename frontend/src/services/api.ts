@@ -1,6 +1,14 @@
 import { supabase } from "@/integrations/supabase/client";
 
-const API_BASE = import.meta.env.VITE_API_URL;
+function normalizeApiBase(raw: string): string {
+  const trimmed = (raw || "").trim().replace(/\/+$/, "");
+  if (!trimmed) return "/api/v1";
+  if (trimmed.endsWith("/api/v1")) return trimmed;
+  if (trimmed.endsWith("/api")) return `${trimmed}/v1`;
+  return `${trimmed}/api/v1`;
+}
+
+const API_BASE = normalizeApiBase(import.meta.env.VITE_API_URL || "");
 
 async function getAuthHeader(): Promise<Record<string, string>> {
   const { data } = await supabase.auth.getSession();
@@ -9,11 +17,15 @@ async function getAuthHeader(): Promise<Record<string, string>> {
   return { Authorization: `Bearer ${token}` };
 }
 
-async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+async function apiFetch<T>(
+  path: string,
+  options: RequestInit = {},
+): Promise<T> {
   const headers = await getAuthHeader();
-  const defaultHeaders = options.body instanceof FormData 
-    ? { ...headers } 
-    : { "Content-Type": "application/json", ...headers };
+  const defaultHeaders =
+    options.body instanceof FormData
+      ? { ...headers }
+      : { "Content-Type": "application/json", ...headers };
 
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
@@ -34,9 +46,13 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
   if (!res.ok) {
     const err = await parseResponseBody();
     if (typeof err === "object" && err && "detail" in err) {
-      throw new Error(String((err as { detail?: unknown }).detail ?? "API error"));
+      throw new Error(
+        String((err as { detail?: unknown }).detail ?? "API error"),
+      );
     }
-    throw new Error(typeof err === "string" ? err : res.statusText || "API error");
+    throw new Error(
+      typeof err === "string" ? err : res.statusText || "API error",
+    );
   }
 
   const body = await parseResponseBody();

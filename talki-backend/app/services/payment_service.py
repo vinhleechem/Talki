@@ -7,11 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.payment import ManualPaymentConfig, PaymentOrder, Subscription
 from app.models.user import User
 
-PLAN_PRICES = {
-    "monthly": 99000,
-    "yearly": 999000
-}
-
 PLAN_DURATIONS = {
     "monthly": timedelta(days=30),
     "yearly": timedelta(days=365)
@@ -19,7 +14,7 @@ PLAN_DURATIONS = {
 
 def validate_plan(plan: str) -> str:
     """Validate subscription plan name used by payment flows."""
-    if plan not in PLAN_PRICES:
+    if plan not in ["monthly", "yearly"]:
         raise ValueError(f"Invalid plan: {plan}")
     return plan
 
@@ -37,6 +32,8 @@ async def get_or_create_manual_config(db: AsyncSession) -> ManualPaymentConfig:
     config = ManualPaymentConfig(id=1, transfer_prefix="TALKI")
     db.add(config)
     await db.flush()
+    # Load server-side defaults (e.g., updated_at) in async context to avoid lazy-load later.
+    await db.refresh(config)
     return config
 
 
@@ -47,13 +44,36 @@ async def create_manual_payment_order(
 ) -> tuple[PaymentOrder, ManualPaymentConfig]:
     plan = validate_plan(plan)
     config = await get_or_create_manual_config(db)
+    now = datetime.now(timezone.utc)
+
+    existing_in_progress_result = await db.execute(
+        select(PaymentOrder)
+        .where(
+            PaymentOrder.user_id == user_id,
+            PaymentOrder.status.in_(["created", "pending"]),
+            PaymentOrder.expires_at > now,
+        )
+        .order_by(PaymentOrder.created_at.desc())
+        .limit(1)
+    )
+    existing_in_progress = existing_in_progress_result.scalar_one_or_none()
+
+    # Idempotent behavior: only one active in-progress order per user at a time.
+    if existing_in_progress is not None:
+        existing_in_progress.plan = plan
+        existing_in_progress.amount_vnd = config.yearly_price if plan == "yearly" else config.monthly_price
+        existing_in_progress.expires_at = now + timedelta(days=2)
+        if not existing_in_progress.transfer_note:
+            existing_in_progress.transfer_note = build_transfer_note(config.transfer_prefix, existing_in_progress.id)
+        await db.flush()
+        return existing_in_progress, config
 
     order = PaymentOrder(
         user_id=user_id,
         plan=plan,
-        amount_vnd=PLAN_PRICES[plan],
-        status="pending",
-        expires_at=datetime.now(timezone.utc) + timedelta(days=2),
+        amount_vnd=config.yearly_price if plan == "yearly" else config.monthly_price,
+        status="created",
+        expires_at=now + timedelta(days=2),
     )
     db.add(order)
     await db.flush()
@@ -63,6 +83,33 @@ async def create_manual_payment_order(
     return order, config
 
 
+async def confirm_manual_payment_order(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    order_id: uuid.UUID,
+) -> PaymentOrder:
+    now = datetime.now(timezone.utc)
+    order = await db.get(PaymentOrder, order_id)
+    if not order or order.user_id != user_id:
+        raise ValueError("Payment order not found")
+
+    if order.expires_at <= now:
+        raise ValueError("Payment order has expired")
+
+    if order.status == "created":
+        order.status = "pending"
+        order.reviewed_at = None
+        order.reviewed_by = None
+        order.admin_note = None
+        await db.flush()
+        return order
+
+    if order.status == "pending":
+        return order
+
+    raise ValueError("Only newly created orders can be confirmed")
+
+
 async def list_user_payment_orders(db: AsyncSession, user_id: uuid.UUID) -> list[PaymentOrder]:
     result = await db.execute(
         select(PaymentOrder)
@@ -70,6 +117,39 @@ async def list_user_payment_orders(db: AsyncSession, user_id: uuid.UUID) -> list
         .order_by(PaymentOrder.created_at.desc())
     )
     return result.scalars().all()
+
+
+async def sync_user_plan_state(db: AsyncSession, user_id: uuid.UUID) -> None:
+    """Recompute user plan from active subscriptions, including expiry fallback to free."""
+    now = datetime.now(timezone.utc)
+    user = await db.get(User, user_id)
+    if not user:
+        return
+
+    active_subs_result = await db.execute(
+        select(Subscription)
+        .where(
+            Subscription.user_id == user_id,
+            Subscription.expires_at > now,
+        )
+        .order_by(Subscription.expires_at.desc())
+    )
+    active_subs = active_subs_result.scalars().all()
+
+    if not active_subs:
+        user.plan = "free"
+        user.plan_expires_at = None
+        user.max_energy = 3
+        if user.energy > 3:
+            user.energy = 3
+        return
+
+    latest = active_subs[0]
+    user.plan = latest.plan
+    user.plan_expires_at = latest.expires_at
+    user.max_energy = 20
+    if user.energy > 20:
+        user.energy = 20
 
 
 async def _apply_paid_order(db: AsyncSession, order: PaymentOrder) -> None:
@@ -114,6 +194,8 @@ async def admin_review_payment_order(
     if not order:
         raise ValueError("Payment order not found")
 
+    previous_status = order.status
+
     order.status = new_status
     order.admin_note = admin_note
     order.reviewed_at = datetime.now(timezone.utc)
@@ -125,6 +207,14 @@ async def admin_review_payment_order(
         await _apply_paid_order(db, order)
     elif new_status in {"failed", "cancelled", "pending"}:
         order.paid_at = None
+        if previous_status == "paid":
+            existing_sub_result = await db.execute(
+                select(Subscription).where(Subscription.order_id == order.id)
+            )
+            existing_sub = existing_sub_result.scalar_one_or_none()
+            if existing_sub is not None:
+                await db.delete(existing_sub)
+        await sync_user_plan_state(db, order.user_id)
 
     await db.flush()
     return order

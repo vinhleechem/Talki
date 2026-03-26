@@ -77,6 +77,8 @@ export interface UserProfile {
   avatar_url: string | null;
   hearts: number;
   is_premium: boolean;
+  plan: string;
+  plan_expires_at: string | null;
   role: string;
   created_at: string;
 }
@@ -146,11 +148,57 @@ export interface AdminBoss {
 export interface AdminPayment {
   id: string;
   user_id: string;
+  user_email: string;
+  user_name: string;
   plan: string;
   amount_vnd: number;
   status: string;
+  transfer_note: string | null;
+  admin_note: string | null;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
   created_at: string;
   paid_at: string | null;
+}
+
+export interface AdminPaymentConfig {
+  qr_image_url: string | null;
+  bank_name: string | null;
+  account_number: string | null;
+  account_name: string | null;
+  transfer_prefix: string;
+  instructions: string | null;
+  monthly_price: number;
+  yearly_price: number;
+  updated_at: string | null;
+}
+
+export type PaymentPlan = "monthly" | "yearly";
+
+export interface ManualPaymentConfig {
+  qr_image_url: string | null;
+  bank_name: string | null;
+  account_name: string | null;
+  transfer_prefix: string;
+  instructions: string | null;
+  monthly_price: number;
+  yearly_price: number;
+}
+
+export interface ManualPaymentOrder {
+  id: string;
+  plan: string;
+  amount_vnd: number;
+  status: string;
+  transfer_note: string | null;
+  expires_at: string;
+  created_at: string;
+  paid_at: string | null;
+  qr_image_url: string | null;
+  bank_name: string | null;
+  account_number: string | null;
+  account_name: string | null;
+  instructions: string | null;
 }
 
 export interface AdminAchievement {

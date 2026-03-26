@@ -198,6 +198,8 @@ class AchievementUpdate(BaseModel):
 class AdminPaymentOut(BaseModel):
     id: uuid.UUID
     user_id: uuid.UUID
+    user_email: str
+    user_name: str
     plan: str
     amount_vnd: int
     status: str
@@ -219,6 +221,8 @@ class AdminManualPaymentConfigOut(BaseModel):
     account_name: Optional[str]
     transfer_prefix: str
     instructions: Optional[str]
+    monthly_price: int
+    yearly_price: int
     updated_at: Optional[datetime]
 
 
@@ -229,6 +233,8 @@ class AdminManualPaymentConfigUpdate(BaseModel):
     account_name: Optional[str] = None
     transfer_prefix: Optional[str] = None
     instructions: Optional[str] = None
+    monthly_price: Optional[int] = None
+    yearly_price: Optional[int] = None
 
 
 class AdminPaymentReviewRequest(BaseModel):
@@ -672,9 +678,33 @@ async def list_payments(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(PaymentOrder).order_by(PaymentOrder.created_at.desc()).offset(skip).limit(limit)
+        select(PaymentOrder)
+        .where(PaymentOrder.status != "created")
+        .order_by(PaymentOrder.created_at.desc())
+        .offset(skip)
+        .limit(limit)
     )
-    return result.scalars().all()
+    orders = result.scalars().all()
+    
+    out = []
+    for order in orders:
+        user = await db.get(User, order.user_id)
+        out.append(AdminPaymentOut(
+            id=order.id,
+            user_id=order.user_id,
+            user_email=user.email if user else "Unknown",
+            user_name=user.display_name if user else "Unknown",
+            plan=order.plan,
+            amount_vnd=order.amount_vnd,
+            status=order.status,
+            transfer_note=order.transfer_note,
+            admin_note=order.admin_note,
+            reviewed_at=order.reviewed_at,
+            reviewed_by=order.reviewed_by,
+            created_at=order.created_at,
+            paid_at=order.paid_at,
+        ))
+    return out
 
 
 @router.get("/payment-config", response_model=AdminManualPaymentConfigOut)
@@ -690,6 +720,8 @@ async def get_payment_config(
         account_name=config.account_name,
         transfer_prefix=config.transfer_prefix,
         instructions=config.instructions,
+        monthly_price=config.monthly_price,
+        yearly_price=config.yearly_price,
         updated_at=config.updated_at,
     )
 
@@ -713,6 +745,7 @@ async def update_payment_config(
         setattr(config, field, value)
 
     await db.flush()
+    await db.refresh(config)
     return AdminManualPaymentConfigOut(
         qr_image_url=config.qr_image_url,
         bank_name=config.bank_name,
@@ -720,6 +753,8 @@ async def update_payment_config(
         account_name=config.account_name,
         transfer_prefix=config.transfer_prefix,
         instructions=config.instructions,
+        monthly_price=config.monthly_price,
+        yearly_price=config.yearly_price,
         updated_at=config.updated_at,
     )
 
@@ -739,7 +774,22 @@ async def review_payment(
             body.status,
             body.admin_note,
         )
-        return order
+        user = await db.get(User, order.user_id)
+        return AdminPaymentOut(
+            id=order.id,
+            user_id=order.user_id,
+            user_email=user.email if user else "Unknown",
+            user_name=user.display_name if user else "Unknown",
+            plan=order.plan,
+            amount_vnd=order.amount_vnd,
+            status=order.status,
+            transfer_note=order.transfer_note,
+            admin_note=order.admin_note,
+            reviewed_at=order.reviewed_at,
+            reviewed_by=order.reviewed_by,
+            created_at=order.created_at,
+            paid_at=order.paid_at,
+        )
     except ValueError as e:
         detail = str(e)
         status_code = 404 if detail == "Payment order not found" else 400

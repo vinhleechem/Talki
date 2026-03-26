@@ -76,6 +76,8 @@ class ManualPaymentConfig(Base):
     account_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     transfer_prefix: Mapped[str] = mapped_column(String(40), default="TALKI")
     instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
+    monthly_price: Mapped[int] = mapped_column(Integer, nullable=False, default=99000)
+    yearly_price: Mapped[int] = mapped_column(Integer, nullable=False, default=999000)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
