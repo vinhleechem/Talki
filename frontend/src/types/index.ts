@@ -35,6 +35,15 @@ export interface Chapter {
   progress_percent: number;
 }
 
+export interface AdminBossConfig {
+  id: string;
+  target_id: string; // e.g., 'Giao tiếp cơ bản'
+  config_type: "stage" | "lesson" | "default";
+  scenarios: string[];
+  personalities: string[];
+  created_at?: string;
+}
+
 // ─── Conversation (Boss Fight) ───────────────────────────────────────────────
 
 export interface StartConversationResponse {

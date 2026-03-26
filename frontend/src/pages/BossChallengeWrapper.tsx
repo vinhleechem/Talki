@@ -1,165 +1,165 @@
 import { useLocation, Navigate } from "react-router-dom";
+import { useEffect, useState } from "react";
 import BossChallenge from "@/components/BossChallenge";
+import type { AdminBossConfig } from "@/types";
 
-// Stage-based scenario configurations (for post-stage boss challenges)
-const stageScenarios: Record<string, { scenarios: string[]; personalities: string[] }> = {
-  "Giao tiếp cơ bản": {
-    scenarios: [
-      "Bạn đang tham dự một workshop về tài chính và bất ngờ gặp lại người bạn cũ ngồi cạnh",
-      "Bạn gặp người lạ tò mò hỏi về công việc của bạn",
-      "Bạn vừa chuyển đến khu phố mới và gặp hàng xóm lần đầu"
-    ],
-    personalities: [
-      "friendly and enthusiastic - người bạn vui vẻ",
-      "curious and talkative - người tọc mạch",
-      "kind and welcoming - hàng xóm thân thiện"
-    ]
-  },
-  "Giao tiếp lớp học": {
-    scenarios: [
-      "Giáo viên yêu cầu bạn phát biểu ý kiến về một chủ đề khó",
-      "Bạn cần phản biện ý kiến của bạn cùng nhóm một cách lịch sự",
-      "Bạn phải trình bày bài tập nhóm trước lớp"
-    ],
-    personalities: [
-      "strict teacher - giáo viên nghiêm khắc",
-      "skeptical classmate - bạn học hay hoài nghi",
-      "encouraging teacher - giáo viên khích lệ"
-    ]
-  },
-  "Thuyết trình đám đông": {
-    scenarios: [
-      "Bạn đang thuyết trình và có người đặt câu hỏi khó",
-      "Bạn cần thuyết phục nhà đầu tư về ý tưởng của mình",
-      "Bạn phải giải trình khi bị phản đối mạnh"
-    ],
-    personalities: [
-      "critical investor - nhà đầu tư khó tính",
-      "skeptical audience member - khán giả hoài nghi",
-      "demanding stakeholder - bên liên quan đòi hỏi cao"
-    ]
-  },
-  default: {
-    scenarios: [
-      "Bạn gặp một tình huống giao tiếp thực tế cần xử lý",
-      "Một người lạ tiếp cận bạn trong tình huống bất ngờ"
-    ],
-    personalities: [
-      "neutral and professional - trung lập và chuyên nghiệp",
-      "friendly and casual - thân thiện và thoải mái"
-    ]
-  }
-};
+// ─── Mock API (to be replaced with adminApi.listBossConfigs()) ────────────────
 
-// Lesson-based scenarios mapping
-const lessonScenarios: Record<string, { scenarios: string[], personalities: string[] }> = {
-  "Xin chào": {
+const MOCK_BOSS_CONFIGS: AdminBossConfig[] = [
+  {
+    id: "stage-1",
+    target_id: "Giao tiếp cơ bản",
+    config_type: "stage",
     scenarios: [
-      "Bạn đang tham dự một workshop về tài chính và bất ngờ gặp lại người bạn cũ ngồi cạnh",
-      "Bạn lạc đường và cần nhờ người lạ chỉ đường",
-      "Bạn vừa chuyển đến khu phố mới và gặp hàng xóm lần đầu"
+      "Bạn đang tham dự một workshop về tài chính và bất ngờ gặp lại người bạn cũ ngồi cạnh. Hãy bắt đầu cuộc trò chuyện.",
+      "Bạn vừa chuyển đến khu phố mới và gặp hàng xóm lần đầu tiên. Hãy làm quen.",
+      "Bạn gặp người lạ tò mò hỏi về công việc của bạn. Hãy trả lời và giữ cuộc trò chuyện thú vị.",
     ],
     personalities: [
-      "friendly and enthusiastic - người bạn cũ vui vẻ",
+      "friendly and enthusiastic - người bạn cũ vui vẻ, hay hỏi thăm",
+      "curious and talkative - hàng xóm tọc mạch nhưng tốt bụng",
+      "reserved but polite - người lạ lịch sự nhưng hơi dè dặt",
+    ],
+  },
+  {
+    id: "lesson-chao",
+    target_id: "Xin chào",
+    config_type: "lesson",
+    scenarios: [
+      "Bạn lạc đường và cần nhờ người lạ chỉ đường đến ga tàu gần nhất.",
+      "Bạn vừa chuyển đến khu phố mới và gặp hàng xóm lần đầu.",
+    ],
+    personalities: [
       "helpful but busy - người lạ tốt bụng nhưng hơi vội",
-      "curious and talkative - hàng xóm tọc mạch"
-    ]
+      "curious and talkative - hàng xóm tọc mạch",
+    ],
   },
-  "Cảm ơn & Xin lỗi": {
+  {
+    id: "lesson-cam-on",
+    target_id: "Cảm ơn & Xin lỗi",
+    config_type: "lesson",
     scenarios: [
-      "Bạn vô tình làm đổ cà phê lên áo của đồng nghiệp",
-      "Người lạ giúp bạn nhặt đồ rơi trên đường",
-      "Bạn đến muộn buổi hẹn với bạn bè"
+      "Bạn vô tình làm đổ cà phê lên áo của đồng nghiệp trong giờ nghỉ.",
+      "Người lạ giúp bạn nhặt đồ rơi trên đường. Hãy phản ứng tự nhiên.",
     ],
     personalities: [
       "understanding but slightly annoyed - đồng nghiệp hiểu biết nhưng hơi khó chịu",
       "kind and patient - người lạ tử tế và kiên nhẫn",
-      "forgiving friend - bạn bè hay tha thứ"
-    ]
+    ],
   },
-  "Đồng ý & Từ chối": {
+  {
+    id: "lesson-dong-y",
+    target_id: "Đồng ý & Từ chối",
+    config_type: "lesson",
     scenarios: [
-      "Sếp mời bạn làm thêm giờ vào cuối tuần",
-      "Bạn bè rủ đi chơi nhưng bạn đang bận",
-      "Hàng xóm nhờ trông coi nhà khi đi vắng"
+      "Sếp mời bạn làm thêm giờ vào cuối tuần nhưng bạn đã có kế hoạch từ trước.",
+      "Bạn bè rủ đi chơi nhưng bạn đang cần hoàn thành deadline gấp.",
     ],
     personalities: [
-      "demanding boss - sếp đòi hỏi cao",
-      "persuasive friend - bạn bè hay thuyết phục",
-      "friendly neighbor - hàng xóm thân thiện"
-    ]
+      "demanding boss - sếp đòi hỏi cao nhưng không phi lý",
+      "persuasive friend - bạn bè hay thuyết phục, khó từ chối",
+    ],
   },
-  "default": {
+  {
+    id: "stage-classroom",
+    target_id: "Giao tiếp lớp học",
+    config_type: "stage",
     scenarios: [
-      "Bạn gặp một tình huống giao tiếp thực tế liên quan đến bài học này",
-      "Một người lạ tiếp cận bạn trong tình huống thực tế"
+      "Giáo viên yêu cầu bạn phát biểu ý kiến về một chủ đề khó mà bạn chưa chuẩn bị kỹ.",
+      "Bạn cần phản biện một cách lịch sự quan điểm của bạn cùng nhóm.",
     ],
     personalities: [
-      "neutral and professional",
-      "friendly and casual"
-    ]
-  }
-};
+      "strict teacher - giáo viên nghiêm khắc, hay đặt câu hỏi phản biện",
+      "skeptical classmate - bạn học hay hoài nghi và tranh luận",
+    ],
+  },
+  {
+    id: "default",
+    target_id: "default",
+    config_type: "default",
+    scenarios: [
+      "Bạn gặp một tình huống giao tiếp thực tế cần xử lý.",
+    ],
+    personalities: [
+      "neutral and professional - trung lập và chuyên nghiệp",
+    ],
+  },
+];
+
+// ─── Boss avatar config ───────────────────────────────────────────────────────
+
+interface BossVisual {
+  letter: string;
+  color: string;
+  name: string;
+}
+
+function getBossVisual(personalityName: string, stageId: number): BossVisual {
+  const colors = ["#FF6B35", "#7C3AED", "#0EA5E9", "#16A34A", "#DC2626", "#EA580C"];
+  const c = colors[stageId % colors.length];
+  const firstWord = personalityName.split(" ")[0] ?? "B";
+  return {
+    letter: firstWord.charAt(0).toUpperCase(),
+    color: c,
+    name: personalityName.includes("-")
+      ? personalityName.split("-")[1].trim()
+      : personalityName,
+  };
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function pickRandom<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function findConfig(
+  configs: AdminBossConfig[],
+  targetId: string,
+  configType: AdminBossConfig["config_type"]
+): AdminBossConfig {
+  return (
+    configs.find((c) => c.target_id === targetId && c.config_type === configType) ??
+    configs.find((c) => c.config_type === "default") ??
+    configs[0]
+  );
+}
+
+// ─── Wrapper ──────────────────────────────────────────────────────────────────
 
 const BossChallengeWrapper = () => {
   const location = useLocation();
+  const [configs] = useState<AdminBossConfig[]>(MOCK_BOSS_CONFIGS);
+
   const state = location.state as {
     stageId: number;
-    sceneId?: number;
-    lessonTitle?: string;
     stageTitle?: string;
-    // Legacy props from old boss system
-    scenario?: string;
-    scenarioName?: string;
-    gender?: "male" | "female";
-    personality?: string;
-    personalityName?: string;
+    lessonTitle?: string;
   } | null;
 
-  if (!state) {
-    return <Navigate to="/roadmap" replace />;
-  }
+  if (!state) return <Navigate to="/roadmap" replace />;
 
-  // Stage-based boss challenge (from /roadmap after completing all lessons)
-  if (state.stageTitle && !state.lessonTitle) {
-    const stageConfig = stageScenarios[state.stageTitle] || stageScenarios["default"];
-    const randomScenario = stageConfig.scenarios[Math.floor(Math.random() * stageConfig.scenarios.length)];
-    const randomPersonality = stageConfig.personalities[Math.floor(Math.random() * stageConfig.personalities.length)];
-    const randomGender: "male" | "female" = Math.random() > 0.5 ? "male" : "female";
+  // Determine which config to use
+  const configType: AdminBossConfig["config_type"] = state.stageTitle && !state.lessonTitle ? "stage" : "lesson";
+  const targetId = state.lessonTitle ?? state.stageTitle ?? "default";
+  const config = findConfig(configs, targetId, configType);
 
-    return (
-      <BossChallenge
-        scenario={randomScenario}
-        scenarioName={randomScenario}
-        gender={randomGender}
-        personality={randomPersonality}
-        personalityName={randomPersonality}
-        stageId={state.stageId}
-      />
-    );
-  }
+  const scenario = pickRandom(config.scenarios);
+  const personality = pickRandom(config.personalities);
+  const bossVisual = getBossVisual(personality, state.stageId);
 
-  // Lesson-based boss challenge (after each lesson)
-  if (state.lessonTitle) {
-    const lessonConfig = lessonScenarios[state.lessonTitle] || lessonScenarios["default"];
-    const randomScenario = lessonConfig.scenarios[Math.floor(Math.random() * lessonConfig.scenarios.length)];
-    const randomPersonality = lessonConfig.personalities[Math.floor(Math.random() * lessonConfig.personalities.length)];
-    const randomGender: "male" | "female" = Math.random() > 0.5 ? "male" : "female";
-
-    return (
-      <BossChallenge
-        scenario={randomScenario}
-        scenarioName={randomScenario}
-        gender={randomGender}
-        personality={randomPersonality}
-        personalityName={randomPersonality}
-        stageId={state.stageId}
-      />
-    );
-  }
-
-  // Fallback: redirect if no valid state
-  return <Navigate to="/roadmap" replace />;
+  return (
+    <BossChallenge
+      bossName={bossVisual.name}
+      bossAvatarLetter={bossVisual.letter}
+      bossColor={bossVisual.color}
+      scenario={scenario}
+      scenarioName={scenario}
+      personality={personality}
+      personalityName={personality.includes("-") ? personality.split("-")[1].trim() : personality}
+      stageId={state.stageId}
+    />
+  );
 };
 
 export default BossChallengeWrapper;

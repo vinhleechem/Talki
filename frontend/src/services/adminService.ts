@@ -10,6 +10,7 @@ import type {
   AdminConversation,
   AdminEnergyLog,
   AdminAchievement,
+  AdminBossConfig,
 } from "@/types";
 
 export type {
@@ -23,6 +24,7 @@ export type {
   AdminConversation,
   AdminEnergyLog,
   AdminAchievement,
+  AdminBossConfig,
 };
 
 export const adminApi = {
@@ -141,6 +143,38 @@ export const adminApi = {
     }),
   deleteAchievement: (id: string) =>
     apiFetch<void>(`/admin/achievements/${id}`, { method: "DELETE" }),
+
+  // Boss Configs (MOCK)
+  listBossConfigs: async (): Promise<AdminBossConfig[]> => {
+    // Return mock data for now
+    return [
+      {
+        id: "mock-1",
+        target_id: "Giao tiếp cơ bản",
+        config_type: "stage",
+        scenarios: [
+          "Bạn đang tham dự một workshop về tài chính và bất ngờ gặp lại người bạn cũ ngồi cạnh",
+          "Bạn gặp người lạ tò mò hỏi về công việc của bạn",
+        ],
+        personalities: [
+          "friendly and enthusiastic - người bạn vui vẻ",
+          "curious and talkative - người tọc mạch",
+        ],
+        created_at: new Date().toISOString(),
+      },
+    ];
+  },
+  createBossConfig: async (body: Omit<AdminBossConfig, "id" | "created_at">): Promise<AdminBossConfig> => {
+    console.log("Mock create boss config", body);
+    return { id: "new-mock-id", ...body, created_at: new Date().toISOString() };
+  },
+  updateBossConfig: async (id: string, body: Partial<AdminBossConfig>): Promise<AdminBossConfig> => {
+    console.log("Mock update boss config", id, body);
+    return { id, ...body } as AdminBossConfig;
+  },
+  deleteBossConfig: async (id: string): Promise<void> => {
+    console.log("Mock delete boss config", id);
+  },
 
   // Cloudinary
   getUploadSignature: (resourceType = "video") =>
