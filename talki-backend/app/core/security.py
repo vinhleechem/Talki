@@ -91,3 +91,31 @@ def make_require_admin():
 
 
 require_admin = make_require_admin()
+
+
+async def verify_token_get_user_id(token: str) -> str:
+    """
+    Verify a raw JWT string (no HTTPBearer header).
+    Used by WebSocket endpoints that receive token as a query param.
+    Raises an Exception if the token is invalid or missing 'sub'.
+    """
+    if not token:
+        raise ValueError("Token missing")
+
+    unverified_header = jwt.get_unverified_header(token)
+    alg = (unverified_header or {}).get("alg")
+    if not alg or str(alg).lower() == "none":
+        raise ValueError("The specified alg value is not allowed")
+
+    try:
+        _header_b64, payload_b64, _sig = token.split(".")
+    except ValueError:
+        raise ValueError("Malformed JWT")
+
+    raw_payload = _b64url_decode(payload_b64)
+    payload = json.loads(raw_payload.decode("utf-8"))
+
+    user_id: str = payload.get("sub", "")
+    if not user_id:
+        raise ValueError("Missing subject (sub)")
+    return user_id

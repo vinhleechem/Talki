@@ -1,135 +1,34 @@
-import { useLocation, Navigate } from "react-router-dom";
+import { useLocation, Navigate, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
+import { Loader2, AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import BossChallenge from "@/components/BossChallenge";
+import { bossApi } from "@/services/bossApi";
 import type { AdminBossConfig } from "@/types";
-
-// ─── Mock API (to be replaced with adminApi.listBossConfigs()) ────────────────
-
-const MOCK_BOSS_CONFIGS: AdminBossConfig[] = [
-  {
-    id: "stage-1",
-    target_id: "Giao tiếp cơ bản",
-    config_type: "stage",
-    scenarios: [
-      "Bạn đang tham dự một workshop về tài chính và bất ngờ gặp lại người bạn cũ ngồi cạnh. Hãy bắt đầu cuộc trò chuyện.",
-      "Bạn vừa chuyển đến khu phố mới và gặp hàng xóm lần đầu tiên. Hãy làm quen.",
-      "Bạn gặp người lạ tò mò hỏi về công việc của bạn. Hãy trả lời và giữ cuộc trò chuyện thú vị.",
-    ],
-    personalities: [
-      "friendly and enthusiastic - người bạn cũ vui vẻ, hay hỏi thăm",
-      "curious and talkative - hàng xóm tọc mạch nhưng tốt bụng",
-      "reserved but polite - người lạ lịch sự nhưng hơi dè dặt",
-    ],
-  },
-  {
-    id: "lesson-chao",
-    target_id: "Xin chào",
-    config_type: "lesson",
-    scenarios: [
-      "Bạn lạc đường và cần nhờ người lạ chỉ đường đến ga tàu gần nhất.",
-      "Bạn vừa chuyển đến khu phố mới và gặp hàng xóm lần đầu.",
-    ],
-    personalities: [
-      "helpful but busy - người lạ tốt bụng nhưng hơi vội",
-      "curious and talkative - hàng xóm tọc mạch",
-    ],
-  },
-  {
-    id: "lesson-cam-on",
-    target_id: "Cảm ơn & Xin lỗi",
-    config_type: "lesson",
-    scenarios: [
-      "Bạn vô tình làm đổ cà phê lên áo của đồng nghiệp trong giờ nghỉ.",
-      "Người lạ giúp bạn nhặt đồ rơi trên đường. Hãy phản ứng tự nhiên.",
-    ],
-    personalities: [
-      "understanding but slightly annoyed - đồng nghiệp hiểu biết nhưng hơi khó chịu",
-      "kind and patient - người lạ tử tế và kiên nhẫn",
-    ],
-  },
-  {
-    id: "lesson-dong-y",
-    target_id: "Đồng ý & Từ chối",
-    config_type: "lesson",
-    scenarios: [
-      "Sếp mời bạn làm thêm giờ vào cuối tuần nhưng bạn đã có kế hoạch từ trước.",
-      "Bạn bè rủ đi chơi nhưng bạn đang cần hoàn thành deadline gấp.",
-    ],
-    personalities: [
-      "demanding boss - sếp đòi hỏi cao nhưng không phi lý",
-      "persuasive friend - bạn bè hay thuyết phục, khó từ chối",
-    ],
-  },
-  {
-    id: "stage-classroom",
-    target_id: "Giao tiếp lớp học",
-    config_type: "stage",
-    scenarios: [
-      "Giáo viên yêu cầu bạn phát biểu ý kiến về một chủ đề khó mà bạn chưa chuẩn bị kỹ.",
-      "Bạn cần phản biện một cách lịch sự quan điểm của bạn cùng nhóm.",
-    ],
-    personalities: [
-      "strict teacher - giáo viên nghiêm khắc, hay đặt câu hỏi phản biện",
-      "skeptical classmate - bạn học hay hoài nghi và tranh luận",
-    ],
-  },
-  {
-    id: "default",
-    target_id: "default",
-    config_type: "default",
-    scenarios: [
-      "Bạn gặp một tình huống giao tiếp thực tế cần xử lý.",
-    ],
-    personalities: [
-      "neutral and professional - trung lập và chuyên nghiệp",
-    ],
-  },
-];
+import type { BossSessionResponse } from "@/services/bossApi";
 
 // ─── Boss avatar config ───────────────────────────────────────────────────────
 
-interface BossVisual {
-  letter: string;
-  color: string;
-  name: string;
-}
+const BOSS_COLORS = ["#FF6B35", "#7C3AED", "#0EA5E9", "#16A34A", "#DC2626", "#EA580C"];
 
-function getBossVisual(personalityName: string, stageId: number): BossVisual {
-  const colors = ["#FF6B35", "#7C3AED", "#0EA5E9", "#16A34A", "#DC2626", "#EA580C"];
-  const c = colors[stageId % colors.length];
+function getBossVisual(personalityName: string, stageId: number) {
+  const color = BOSS_COLORS[stageId % BOSS_COLORS.length];
   const firstWord = personalityName.split(" ")[0] ?? "B";
+  const displayName = personalityName.includes("-")
+    ? personalityName.split("-")[1].trim()
+    : personalityName;
   return {
     letter: firstWord.charAt(0).toUpperCase(),
-    color: c,
-    name: personalityName.includes("-")
-      ? personalityName.split("-")[1].trim()
-      : personalityName,
+    color,
+    name: displayName,
   };
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function pickRandom<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
-
-function findConfig(
-  configs: AdminBossConfig[],
-  targetId: string,
-  configType: AdminBossConfig["config_type"]
-): AdminBossConfig {
-  return (
-    configs.find((c) => c.target_id === targetId && c.config_type === configType) ??
-    configs.find((c) => c.config_type === "default") ??
-    configs[0]
-  );
 }
 
 // ─── Wrapper ──────────────────────────────────────────────────────────────────
 
 const BossChallengeWrapper = () => {
   const location = useLocation();
-  const [configs] = useState<AdminBossConfig[]>(MOCK_BOSS_CONFIGS);
+  const navigate = useNavigate();
 
   const state = location.state as {
     stageId: number;
@@ -137,27 +36,94 @@ const BossChallengeWrapper = () => {
     lessonTitle?: string;
   } | null;
 
+  const [loadState, setLoadState] = useState<
+    "loading" | "ready" | "error"
+  >("loading");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [config, setConfig] = useState<AdminBossConfig | null>(null);
+  const [session, setSession] = useState<BossSessionResponse | null>(null);
+
+  useEffect(() => {
+    if (!state) return;
+
+    async function boot() {
+      try {
+        // Fetch all boss configs from BE
+        const configs = await bossApi.listConfigs();
+
+        const configType: AdminBossConfig["config_type"] =
+          state!.stageTitle && !state!.lessonTitle ? "stage" : "lesson";
+        const targetId = state!.lessonTitle ?? state!.stageTitle ?? "default";
+
+        // Find best matching config; fall back gracefully
+        const matched =
+          configs.find(
+            (c) => c.target_id === targetId && c.config_type === configType,
+          ) ??
+          configs.find((c) => c.config_type === "default") ??
+          configs[0];
+
+        if (!matched) throw new Error("Chưa có cấu hình Boss cho bài này. Admin hãy thêm vào Dashboard.");
+
+        setConfig(matched);
+
+        // Create session — BE picks scenario + personality for us
+        const sess = await bossApi.createSession({
+          target_id: matched.target_id,
+          config_type: matched.config_type,
+          max_turns: 7,
+          pass_score: 60,
+        });
+
+        setSession(sess);
+        setLoadState("ready");
+      } catch (e) {
+        setErrorMsg(e instanceof Error ? e.message : "Không thể bắt đầu Boss Fight");
+        setLoadState("error");
+      }
+    }
+
+    boot();
+  }, []);   // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!state) return <Navigate to="/roadmap" replace />;
 
-  // Determine which config to use
-  const configType: AdminBossConfig["config_type"] = state.stageTitle && !state.lessonTitle ? "stage" : "lesson";
-  const targetId = state.lessonTitle ?? state.stageTitle ?? "default";
-  const config = findConfig(configs, targetId, configType);
+  // ── Loading ──
+  if (loadState === "loading") {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4">
+        <Loader2 className="w-10 h-10 animate-spin text-primary" />
+        <p className="font-bold text-muted-foreground">Đang chuẩn bị Boss Fight...</p>
+      </div>
+    );
+  }
 
-  const scenario = pickRandom(config.scenarios);
-  const personality = pickRandom(config.personalities);
-  const bossVisual = getBossVisual(personality, state.stageId);
+  // ── Error ──
+  if (loadState === "error" || !session || !config) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-6 text-center">
+        <AlertCircle className="w-12 h-12 text-destructive" />
+        <p className="text-xl font-black">Không thể bắt đầu</p>
+        <p className="text-muted-foreground text-sm max-w-xs">{errorMsg}</p>
+        <Button onClick={() => navigate("/roadmap")}>Về Bản đồ</Button>
+      </div>
+    );
+  }
+
+  const bossVisual = getBossVisual(session.personality, state.stageId);
 
   return (
     <BossChallenge
+      sessionId={session.session_id}
       bossName={bossVisual.name}
       bossAvatarLetter={bossVisual.letter}
       bossColor={bossVisual.color}
-      scenario={scenario}
-      scenarioName={scenario}
-      personality={personality}
-      personalityName={personality.includes("-") ? personality.split("-")[1].trim() : personality}
-      stageId={state.stageId}
+      scenario={session.scenario}
+      personalityName={bossVisual.name}
+      maxTurns={session.max_turns}
+      passScore={session.pass_score}
+      greetingText={session.greeting_text}
+      greetingAudioB64={session.greeting_audio_b64}
     />
   );
 };

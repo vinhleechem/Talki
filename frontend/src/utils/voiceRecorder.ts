@@ -154,3 +154,146 @@ export class VoiceRecognition {
     return this.isListening;
   }
 }
+
+// ─── VoiceActivityDetector ────────────────────────────────────────────────────
+// Auto-detects when user starts and stops speaking using AudioContext analysis.
+// No manual button needed — fires onSpeechEnd(blob) after SILENCE_DURATION ms
+// of silence following detected speech.
+
+const SILENCE_THRESHOLD = 0.012; // RMS below this = silence
+const SILENCE_DURATION = 1500;   // ms of silence before considering speech done
+const MIN_SPEECH_MS = 400;       // minimum speech length to be considered valid
+
+export class VoiceActivityDetector {
+  private stream: MediaStream | null = null;
+  private audioContext: AudioContext | null = null;
+  private analyser: AnalyserNode | null = null;
+  private mediaRecorder: MediaRecorder | null = null;
+  private chunks: Blob[] = [];
+  private silenceTimer: ReturnType<typeof setTimeout> | null = null;
+  private speechStartTime: number | null = null;
+  private _active = false;
+  private onSpeechEnd: ((blob: Blob) => void) | null = null;
+  private onSpeechStart: (() => void) | null = null;
+  private rafId: number | null = null;
+
+  async start(
+    onSpeechEnd: (blob: Blob) => void,
+    onSpeechStart?: () => void,
+  ): Promise<void> {
+    if (this._active) return;
+    this.onSpeechEnd = onSpeechEnd;
+    this.onSpeechStart = onSpeechStart ?? null;
+
+    this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    this.audioContext = new AudioContext();
+    this.analyser = this.audioContext.createAnalyser();
+    this.analyser.fftSize = 512;
+
+    const source = this.audioContext.createMediaStreamSource(this.stream);
+    source.connect(this.analyser);
+
+    this.mediaRecorder = new MediaRecorder(this.stream);
+    this.chunks = [];
+    this.mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) this.chunks.push(e.data);
+    };
+    this.mediaRecorder.start(100); // get chunks every 100ms
+
+    this._active = true;
+    this._poll();
+  }
+
+  private _getRms(): number {
+    if (!this.analyser) return 0;
+    const data = new Float32Array(this.analyser.fftSize);
+    this.analyser.getFloatTimeDomainData(data);
+    let sum = 0;
+    for (const v of data) sum += v * v;
+    return Math.sqrt(sum / data.length);
+  }
+
+  private _poll() {
+    if (!this._active) return;
+    const rms = this._getRms();
+    const isSpeaking = rms > SILENCE_THRESHOLD;
+
+    if (isSpeaking) {
+      if (!this.speechStartTime) {
+        this.speechStartTime = Date.now();
+        this.onSpeechStart?.();
+      }
+      // Cancel any pending silence timer
+      if (this.silenceTimer) {
+        clearTimeout(this.silenceTimer);
+        this.silenceTimer = null;
+      }
+    } else if (this.speechStartTime) {
+      // User may have stopped — start silence timer
+      if (!this.silenceTimer) {
+        this.silenceTimer = setTimeout(() => {
+          const speechDuration = Date.now() - (this.speechStartTime ?? 0);
+          if (speechDuration >= MIN_SPEECH_MS) {
+            this._commitBlob();
+          } else {
+            // Too short — ignore and reset
+            this.speechStartTime = null;
+          }
+        }, SILENCE_DURATION);
+      }
+    }
+
+    this.rafId = requestAnimationFrame(() => this._poll());
+  }
+
+  private _commitBlob() {
+    if (!this.mediaRecorder || !this.onSpeechEnd) return;
+    this.mediaRecorder.stop();
+    this.mediaRecorder.onstop = () => {
+      const blob = new Blob(this.chunks, { type: "audio/webm" });
+      this.onSpeechEnd?.(blob);
+      // Restart recording for next turn
+      this.chunks = [];
+      this.speechStartTime = null;
+      this.silenceTimer = null;
+      if (this._active && this.stream) {
+        this.mediaRecorder = new MediaRecorder(this.stream);
+        this.mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) this.chunks.push(e.data);
+        };
+        this.mediaRecorder.start(100);
+      }
+    };
+  }
+
+  stop(): void {
+    this._active = false;
+    if (this.rafId) cancelAnimationFrame(this.rafId);
+    if (this.silenceTimer) clearTimeout(this.silenceTimer);
+    this.mediaRecorder?.state !== "inactive" && this.mediaRecorder?.stop();
+    this.stream?.getTracks().forEach((t) => t.stop());
+    this.audioContext?.close();
+    this.stream = null;
+    this.audioContext = null;
+    this.analyser = null;
+    this.mediaRecorder = null;
+    this.speechStartTime = null;
+    this.silenceTimer = null;
+  }
+
+  isActive(): boolean {
+    return this._active;
+  }
+
+  /** Temporarily pause VAD (while boss is playing audio) */
+  pause(): void {
+    if (this.silenceTimer) { clearTimeout(this.silenceTimer); this.silenceTimer = null; }
+    if (this.rafId) { cancelAnimationFrame(this.rafId); this.rafId = null; }
+    this.speechStartTime = null;
+  }
+
+  /** Resume VAD after boss audio finishes */
+  resume(): void {
+    if (this._active) this._poll();
+  }
+}

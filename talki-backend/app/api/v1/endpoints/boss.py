@@ -4,7 +4,7 @@ import json
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -173,17 +173,32 @@ async def get_my_sessions(
 async def boss_websocket(
     session_id: str,
     websocket: WebSocket,
+    token: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
     """
     WebSocket endpoint for real-time voice boss fight.
 
-    Authentication: pass token as query param ?token=<jwt>
+    Authentication: pass JWT token as query param ?token=<jwt>
     The client sends raw audio bytes (WebM/Opus) per turn.
     The server returns JSON with transcript, reply text, audio (base64 MP3),
     HP updates, and optionally final scores.
     """
     await websocket.accept()
+
+    # ── Auth via token query param ───────────────────────────────────────────
+    if not token:
+        await websocket.send_text(json.dumps({"type": "error", "message": "Missing auth token"}))
+        await websocket.close(code=4001)
+        return
+
+    try:
+        from app.core.security import verify_token_get_user_id
+        user_id = await verify_token_get_user_id(token)
+    except Exception:
+        await websocket.send_text(json.dumps({"type": "error", "message": "Invalid or expired token"}))
+        await websocket.close(code=4001)
+        return
 
     # Load session
     try:
