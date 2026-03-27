@@ -9,6 +9,7 @@ from app.api.v1.endpoints import (
     achievements,
     mistakes,
     admin,
+    boss,
 )
 
 router = APIRouter(prefix="/api/v1")
@@ -21,3 +22,4 @@ router.include_router(payments.router)
 router.include_router(achievements.router)
 router.include_router(mistakes.router)
 router.include_router(admin.router)
+router.include_router(boss.router)

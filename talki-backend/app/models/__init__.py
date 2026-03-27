@@ -2,6 +2,7 @@ from app.models.user import User, EnergyLog
 from app.models.lesson import Chapter, Lesson, Boss, UserLessonProgress, LessonAttemptFeedback
 from app.models.payment import ManualPaymentConfig, PaymentOrder, Subscription
 from app.models.achievement import Achievement, UserAchievement
+from app.models.boss import BossConfig, BossSession
 
 __all__ = [
     "User",
@@ -20,4 +21,6 @@ __all__ = [
     "ManualPaymentConfig",
     "Achievement",
     "UserAchievement",
+    "BossConfig",
+    "BossSession",
 ]

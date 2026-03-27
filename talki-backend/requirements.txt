@@ -1,5 +1,5 @@
 fastapi             # Framework làm Backend (Nhanh, hiện đại)
-uvicorn             # Cái máy chủ để chạy code FastAPI
+uvicorn             # Cái máy chủy để chạy code FastAPI
 sqlalchemy[asyncio]   # Thư viện để code Python nói chuyện với Database
 asyncpg             # Driver giúp kết nối Postgres siêu nhanh (bất đồng bộ)
 httpx               # Async HTTP client – dùng để gọi Supabase Auth API
@@ -8,7 +8,7 @@ google-genai        # Thư viện chính chủ để gọi Gemini (API mới)
 python-dotenv       # Để đọc file cấu hình .env
 pydantic-settings   # Quản lý config từ .env
 pyjwt               # Xác thực JWT token từ Supabase
-# Cài thêm khi dùng Voice features:
+# Voice features:
 google-cloud-speech       # STT tiếng Việt
-# google-cloud-texttospeech # TTS (backup, ưu tiên dùng FPT.AI)
-psycopg2-binary             # Driver giúp kết nối Postgres siêu nhanh (bất đồng bộ)
+google-cloud-texttospeech # TTS – tổng hợp giọng Boss
+psycopg2-binary             # Driver giúp kết nối Postgres siêu nhanh (bất đồng bộ)

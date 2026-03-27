@@ -896,3 +896,93 @@ async def get_upload_signature(
         return cloudinary_service.get_upload_signature(resource_type=resource_type)
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
+
+
+# ─── Admin: Boss Config CRUD ─────────────────────────────────────────────────
+
+from app.models.boss import BossConfig  # noqa: E402
+from app.services import boss_service   # noqa: E402
+
+
+class AdminBossConfigOut(BaseModel):
+    id: str
+    target_id: str
+    config_type: str
+    scenarios: list[str]
+    personalities: list[str]
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class AdminBossConfigCreate(BaseModel):
+    target_id: str
+    config_type: str = "stage"
+    scenarios: list[str]
+    personalities: list[str]
+
+
+class AdminBossConfigUpdate(BaseModel):
+    target_id: Optional[str] = None
+    config_type: Optional[str] = None
+    scenarios: Optional[list[str]] = None
+    personalities: Optional[list[str]] = None
+
+
+def _boss_config_out(c: BossConfig) -> AdminBossConfigOut:
+    return AdminBossConfigOut(
+        id=str(c.id),
+        target_id=c.target_id,
+        config_type=c.config_type,
+        scenarios=c.scenarios or [],
+        personalities=c.personalities or [],
+        created_at=c.created_at.isoformat() if c.created_at else None,
+        updated_at=c.updated_at.isoformat() if c.updated_at else None,
+    )
+
+
+@router.get("/boss-configs", response_model=list[AdminBossConfigOut])
+async def admin_list_boss_configs(
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(require_admin),
+):
+    """Liệt kê tất cả cấu hình Boss."""
+    configs = await boss_service.list_configs(db)
+    return [_boss_config_out(c) for c in configs]
+
+
+@router.post("/boss-configs", response_model=AdminBossConfigOut, status_code=201)
+async def admin_create_boss_config(
+    body: AdminBossConfigCreate,
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(require_admin),
+):
+    """Tạo cấu hình Boss mới."""
+    config = await boss_service.admin_create_config(db, body.model_dump())
+    return _boss_config_out(config)
+
+
+@router.put("/boss-configs/{config_id}", response_model=AdminBossConfigOut)
+async def admin_update_boss_config(
+    config_id: uuid.UUID,
+    body: AdminBossConfigUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(require_admin),
+):
+    """Cập nhật cấu hình Boss."""
+    updates = {k: v for k, v in body.model_dump().items() if v is not None}
+    config = await boss_service.admin_update_config(db, config_id, updates)
+    if not config:
+        raise HTTPException(status_code=404, detail="BossConfig not found")
+    return _boss_config_out(config)
+
+
+@router.delete("/boss-configs/{config_id}", status_code=204)
+async def admin_delete_boss_config(
+    config_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(require_admin),
+):
+    """Xoá cấu hình Boss."""
+    ok = await boss_service.admin_delete_config(db, config_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="BossConfig not found")

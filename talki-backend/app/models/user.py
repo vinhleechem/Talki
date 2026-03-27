@@ -13,6 +13,7 @@ from app.core.database import Base
 if TYPE_CHECKING:
     from app.models.payment import PaymentOrder, Subscription
     from app.models.achievement import UserAchievement
+    from app.models.boss import BossSession
 
 
 class User(Base):
@@ -68,6 +69,7 @@ class User(Base):
     subscriptions: Mapped[list["Subscription"]] = relationship(back_populates="user", foreign_keys="[Subscription.user_id]")
     achievements: Mapped[List["UserAchievement"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     energy_logs: Mapped[list["EnergyLog"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    boss_sessions: Mapped[list["BossSession"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
 
 class EnergyLog(Base):
