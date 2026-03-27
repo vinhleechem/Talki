@@ -267,3 +267,107 @@ async def evaluate_lesson_practice(
             "transcript": "",
             "extracted_mistakes": [],
         })
+
+
+# ─── Boss Fight ────────────────────────────────────────────────────────────────
+
+async def boss_chat_turn(
+    system_prompt: str,
+    history: list[dict],
+    audio_bytes: bytes,
+    mime_type: str = "audio/webm",
+) -> dict:
+    """
+    Send user AUDIO directly to Gemini for native audio analysis.
+    This captures hesitation, confidence, tone, and filler words better than text.
+    """
+    client = _get_client()
+    clean_mime = _normalize_mime_type(mime_type)
+
+    contents = []
+    # Add history as text for context
+    for msg in history:
+        role = "user" if msg.get("role") == "user" else "model"
+        contents.append(
+            types.Content(role=role, parts=[types.Part(text=msg.get("content", ""))])
+        )
+
+    # Add the new user TURN (Audio + Instructions)
+    # Instruction to Gemini: Hear the audio, transcript it, reply, and evaluate confidence/fillers
+    instruction = (
+        f"[SYSTEM_CONTEXT]\n{system_prompt}\n[/SYSTEM_CONTEXT]\n\n"
+        "Hãy lắng nghe kỹ đoạn âm thanh (audio) của người dùng đính kèm. "
+        "Dựa trên CẢ nội dung nói và CÁCH nói (ngập ngừng, tông giọng, tốc độ), hãy:\n"
+        "1. Chuyển ngữ chính xác những gì người dùng đã nói (transcript).\n"
+        "2. Phản hồi lại bằng vai diễn của bạn (reply).\n"
+        "3. Đếm số lần 'ừm', 'à', 'ờ', hoặc lặp từ do ngập ngừng (filler_count).\n"
+        "4. Đánh giá độ lưu loát (fluency_score) và nội dung (content_score) từ 0-100.\n\n"
+        "BẮT BUỘC TRẢ VỀ JSON:\n"
+        "{\n"
+        '  "transcript": "...",\n'
+        '  "reply": "...",\n'
+        '  "filler_count": 0,\n'
+        '  "fluency_score": 0,\n'
+        '  "content_score": 0\n'
+        "}"
+    )
+
+    contents.append(
+        types.Content(role="user", parts=[
+            types.Part(inline_data=types.Blob(data=audio_bytes, mime_type=clean_mime)),
+            types.Part(text=instruction)
+        ])
+    )
+
+    response = await client.aio.models.generate_content(
+        model=settings.GEMINI_MODEL,
+        contents=contents,
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+        ),
+    )
+
+    raw = response.text or "{}"
+    try:
+        result = _parse_json_response(raw, "boss_chat_turn_audio")
+    except RuntimeError:
+        result = {}
+
+    return {
+        "transcript": str(result.get("transcript", "[Không nghe rõ]")).strip(),
+        "reply": str(result.get("reply", "Thú vị đấy, tiếp tục nào!")).strip(),
+        "filler_count": int(result.get("filler_count", 0)),
+        "fluency_score": float(result.get("fluency_score", 50)),
+        "content_score": float(result.get("content_score", 50)),
+    }
+
+
+async def boss_evaluate(eval_prompt: str) -> dict:
+    """
+    Run the final evaluation prompt and return structured scores.
+    Returns {score, fluency_score, confidence_score, content_score, filler_total, feedback}.
+    """
+    client = _get_client()
+
+    response = await client.aio.models.generate_content(
+        model=settings.GEMINI_MODEL,
+        contents=[types.Content(role="user", parts=[types.Part(text=eval_prompt)])],
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+        ),
+    )
+
+    raw = response.text or "{}"
+    try:
+        result = _parse_json_response(raw, "boss_evaluate")
+    except RuntimeError:
+        result = {}
+
+    return {
+        "score": int(result.get("score", 55)),
+        "fluency_score": float(result.get("fluency_score", 50)),
+        "confidence_score": float(result.get("confidence_score", 50)),
+        "content_score": float(result.get("content_score", 50)),
+        "filler_total": int(result.get("filler_total", 0)),
+        "feedback": str(result.get("feedback", "Bạn đã hoàn thành Boss Fight!")).strip(),
+    }

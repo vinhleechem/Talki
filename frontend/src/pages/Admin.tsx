@@ -12,6 +12,7 @@ import {
   AdminConversation,
   AdminEnergyLog,
   AdminAchievement,
+  AdminBossConfig,
 } from "@/services/adminService";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -2541,7 +2542,7 @@ function ContentPage() {
 
 // ─── Sub-page: Boss ───────────────────────────────────────────────────────────
 
-function BossPage() {
+function BossCharacterPage() {
   const [bosses, setBosses] = useState<AdminBoss[]>([]);
   const [chapters, setChapters] = useState<AdminChapter[]>([]);
   const [loading, setLoading] = useState(true);
@@ -3796,6 +3797,313 @@ function ConversationsPage() {
   );
 }
 
+// ─── Boss Admin Tabs (wrapper) ────────────────────────────────────────────────
+
+function BossAdminTabs() {
+  const [bossTab, setBossTab] = useState<"characters" | "scenarios">("characters");
+  return (
+    <>
+      <div className="flex gap-2 mb-6">
+        <button
+          className="px-4 py-2 text-xs font-black uppercase"
+          style={{
+            border: "3px solid black",
+            boxShadow: bossTab === "characters" ? "none" : "3px 3px 0 black",
+            backgroundColor: bossTab === "characters" ? PRIMARY : "white",
+            color: bossTab === "characters" ? "white" : "#0f172a",
+          }}
+          onClick={() => setBossTab("characters")}
+        >
+          🥷 Nhân vật Boss
+        </button>
+        <button
+          className="px-4 py-2 text-xs font-black uppercase"
+          style={{
+            border: "3px solid black",
+            boxShadow: bossTab === "scenarios" ? "none" : "3px 3px 0 black",
+            backgroundColor: bossTab === "scenarios" ? PRIMARY : "white",
+            color: bossTab === "scenarios" ? "white" : "#0f172a",
+          }}
+          onClick={() => setBossTab("scenarios")}
+        >
+          🎭 Kịch bản Boss Fight
+        </button>
+      </div>
+      {bossTab === "characters" && <BossCharacterPage />}
+      {bossTab === "scenarios" && <BossPage />}
+    </>
+  );
+}
+
+// ─── Sub-page: Boss Config ────────────────────────────────────────────────────
+
+function BossPage() {
+  const [configs, setConfigs] = useState<AdminBossConfig[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const emptyForm = {
+    target_id: "",
+    config_type: "stage" as AdminBossConfig["config_type"],
+    scenarios: [""],
+    personalities: [""],
+  };
+  const [form, setForm] = useState(emptyForm);
+
+  useEffect(() => {
+    adminApi.listBossConfigs().then((data) => { setConfigs(data); setLoading(false); }).catch(handleError);
+  }, []);
+
+  const handleEdit = (c: AdminBossConfig) => {
+    setForm({ target_id: c.target_id, config_type: c.config_type, scenarios: [...c.scenarios], personalities: [...c.personalities] });
+    setEditingId(c.id);
+    setShowForm(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Xoá cấu hình này?")) return;
+    await adminApi.deleteBossConfig(id);
+    setConfigs((prev) => prev.filter((c) => c.id !== id));
+    toast({ title: "Đã xoá cấu hình" });
+  };
+
+  const handleSave = async () => {
+    if (!form.target_id.trim()) return toast({ title: "Vui lòng nhập tên Stage/Lesson", variant: "destructive" });
+    setSaving(true);
+    try {
+      const payload = {
+        ...form,
+        scenarios: form.scenarios.filter((s) => s.trim()),
+        personalities: form.personalities.filter((p) => p.trim()),
+      };
+      if (editingId) {
+        const updated = await adminApi.updateBossConfig(editingId, payload);
+        setConfigs((prev) => prev.map((c) => (c.id === editingId ? updated : c)));
+        toast({ title: "Đã cập nhật cấu hình Boss" });
+      } else {
+        const created = await adminApi.createBossConfig(payload);
+        setConfigs((prev) => [...prev, created]);
+        toast({ title: "Đã tạo cấu hình Boss mới" });
+      }
+      setShowForm(false);
+      setEditingId(null);
+      setForm(emptyForm);
+    } catch (err) {
+      handleError(err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateScenario = (i: number, val: string) =>
+    setForm((prev) => { const s = [...prev.scenarios]; s[i] = val; return { ...prev, scenarios: s }; });
+  const addScenario = () => setForm((prev) => ({ ...prev, scenarios: [...prev.scenarios, ""] }));
+  const removeScenario = (i: number) => setForm((prev) => ({ ...prev, scenarios: prev.scenarios.filter((_, idx) => idx !== i) }));
+
+  const updatePersonality = (i: number, val: string) =>
+    setForm((prev) => { const p = [...prev.personalities]; p[i] = val; return { ...prev, personalities: p }; });
+  const addPersonality = () => setForm((prev) => ({ ...prev, personalities: [...prev.personalities, ""] }));
+  const removePersonality = (i: number) => setForm((prev) => ({ ...prev, personalities: prev.personalities.filter((_, idx) => idx !== i) }));
+
+  if (loading) return <Spinner />;
+
+  return (
+    <>
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm font-bold text-slate-500">
+          Quản lý kịch bản và nhân vật Boss theo từng Stage / Lesson. Hệ thống sẽ chọn ngẫu nhiên kịch bản phù hợp khi người dùng vào Boss Fight.
+        </p>
+        <button
+          className="px-4 py-2 text-xs font-black uppercase"
+          style={{ ...neo.btn, backgroundColor: PRIMARY, color: "white" }}
+          onClick={() => { setShowForm(true); setEditingId(null); setForm(emptyForm); }}
+        >
+          + Thêm cấu hình
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="bg-white p-5 mb-6" style={neo.card}>
+          <h3 className="font-black uppercase text-base mb-4">
+            {editingId ? "Chỉnh sửa cấu hình" : "Tạo cấu hình mới"}
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="text-xs font-black uppercase text-slate-500 block mb-1">Tên Stage / Lesson</label>
+              <input
+                className="w-full px-3 py-2 text-sm font-bold focus:outline-none"
+                style={{ border: "2px solid black" }}
+                placeholder="VD: Giao tiếp cơ bản"
+                value={form.target_id}
+                onChange={(e) => setForm((p) => ({ ...p, target_id: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="text-xs font-black uppercase text-slate-500 block mb-1">Loại</label>
+              <select
+                className="w-full px-3 py-2 text-sm font-bold bg-white"
+                style={{ border: "2px solid black" }}
+                value={form.config_type}
+                onChange={(e) => setForm((p) => ({ ...p, config_type: e.target.value as AdminBossConfig["config_type"] }))}
+              >
+                <option value="stage">Stage (sau khi hoàn thành chương)</option>
+                <option value="lesson">Lesson (sau bài học)</option>
+                <option value="default">Mặc định (fallback)</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Scenarios */}
+          <div className="mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-black uppercase text-slate-500">Tình huống (Scenarios)</label>
+              <button
+                className="text-xs font-black px-2 py-1"
+                style={{ border: "2px solid black" }}
+                onClick={addScenario}
+              >+ Thêm</button>
+            </div>
+            <div className="space-y-2">
+              {form.scenarios.map((s, i) => (
+                <div key={i} className="flex gap-2">
+                  <input
+                    className="flex-1 px-3 py-2 text-sm font-bold focus:outline-none"
+                    style={{ border: "2px solid black" }}
+                    placeholder={`Tình huống ${i + 1}...`}
+                    value={s}
+                    onChange={(e) => updateScenario(i, e.target.value)}
+                  />
+                  {form.scenarios.length > 1 && (
+                    <button
+                      className="px-2 py-1 text-xs font-black"
+                      style={{ border: "2px solid black", backgroundColor: "#fee2e2" }}
+                      onClick={() => removeScenario(i)}
+                    >✕</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Personalities */}
+          <div className="mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-black uppercase text-slate-500">Tính cách Boss (Personalities)</label>
+              <button
+                className="text-xs font-black px-2 py-1"
+                style={{ border: "2px solid black" }}
+                onClick={addPersonality}
+              >+ Thêm</button>
+            </div>
+            <p className="text-[11px] text-slate-400 mb-2">Gợi ý format: <code className="bg-slate-100 px-1">friendly and enthusiastic - người bạn vui vẻ</code></p>
+            <div className="space-y-2">
+              {form.personalities.map((p, i) => (
+                <div key={i} className="flex gap-2">
+                  <input
+                    className="flex-1 px-3 py-2 text-sm font-bold focus:outline-none"
+                    style={{ border: "2px solid black" }}
+                    placeholder={`Tính cách ${i + 1}...`}
+                    value={p}
+                    onChange={(e) => updatePersonality(i, e.target.value)}
+                  />
+                  {form.personalities.length > 1 && (
+                    <button
+                      className="px-2 py-1 text-xs font-black"
+                      style={{ border: "2px solid black", backgroundColor: "#fee2e2" }}
+                      onClick={() => removePersonality(i)}
+                    >✕</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              className="px-4 py-2 text-xs font-black uppercase"
+              style={{ ...neo.btn, backgroundColor: PRIMARY, color: "white" }}
+              onClick={handleSave}
+              disabled={saving}
+            >
+              {saving ? "Đang lưu..." : editingId ? "Cập nhật" : "Tạo mới"}
+            </button>
+            <button
+              className="px-4 py-2 text-xs font-black uppercase"
+              style={{ ...neo.btn }}
+              onClick={() => { setShowForm(false); setEditingId(null); setForm(emptyForm); }}
+            >
+              Huỷ
+            </button>
+          </div>
+        </div>
+      )}
+
+      {configs.length === 0 ? (
+        <div className="bg-white p-12 text-center" style={neo.card}>
+          <p className="text-4xl mb-3">🥊</p>
+          <p className="font-black text-lg">Chưa có cấu hình Boss nào</p>
+          <p className="text-sm text-slate-500 mt-1">Nhấn "+ Thêm cấu hình" để tạo tình huống đầu tiên.</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {configs.map((c) => (
+            <div key={c.id} className="bg-white p-5" style={neo.card}>
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <span
+                    className="text-[10px] font-black uppercase px-2 py-0.5 mr-2"
+                    style={{ backgroundColor: c.config_type === "stage" ? PRIMARY : c.config_type === "lesson" ? "#0ea5e9" : "#94a3b8", color: "white" }}
+                  >
+                    {c.config_type}
+                  </span>
+                  <span className="font-black text-base">{c.target_id}</span>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    className="px-3 py-1 text-xs font-black uppercase"
+                    style={{ border: "2px solid black" }}
+                    onClick={() => handleEdit(c)}
+                  >Sửa</button>
+                  <button
+                    className="px-3 py-1 text-xs font-black uppercase"
+                    style={{ border: "2px solid black", backgroundColor: "#fee2e2" }}
+                    onClick={() => handleDelete(c.id)}
+                  >Xoá</button>
+                </div>
+              </div>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs font-black uppercase text-slate-400 mb-1">Tình huống ({c.scenarios.length})</p>
+                  <ul className="space-y-1">
+                    {c.scenarios.map((s, i) => (
+                      <li key={i} className="text-xs text-slate-700 flex gap-1">
+                        <span className="font-black text-slate-400">{i + 1}.</span>
+                        <span>{s}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <p className="text-xs font-black uppercase text-slate-400 mb-1">Nhân cách Boss ({c.personalities.length})</p>
+                  <ul className="space-y-1">
+                    {c.personalities.map((p, i) => (
+                      <li key={i} className="text-xs text-slate-700 flex gap-1">
+                        <span className="font-black text-slate-400">{i + 1}.</span>
+                        <span>{p}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
 // ─── Sub-page: Payments ───────────────────────────────────────────────────────
 
 function PaymentsPage() {
@@ -4435,7 +4743,7 @@ export default function Admin() {
           {activeNav === "dashboard" && <DashboardPage />}
           {activeNav === "users" && <UsersPage />}
           {activeNav === "content" && <ContentPage />}
-          {activeNav === "boss" && <BossPage />}
+          {activeNav === "boss" && <BossAdminTabs />}
           {activeNav === "conversations" && <ConversationsPage />}
           {activeNav === "payment" && <PaymentsPage />}
           {activeNav === "achievements" && <AchievementsPage />}
