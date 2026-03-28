@@ -88,6 +88,26 @@ function playBase64Audio(b64: string, mime = "audio/mpeg"): Promise<void> {
   });
 }
 
+function hasFarewellSignal(text?: string): boolean {
+  const normalized = (text || "").trim().toLowerCase();
+  if (!normalized) return false;
+  const keywords = [
+    "tam biet",
+    "tạm biệt",
+    "bye",
+    "goodbye",
+    "hen gap lai",
+    "hẹn gặp lại",
+    "ket thuc",
+    "kết thúc",
+    "dung o day",
+    "dừng ở đây",
+    "thoi nhe",
+    "thôi nhé",
+  ];
+  return keywords.some((k) => normalized.includes(k));
+}
+
 const STATUS_LABEL: Record<FightStatus, string> = {
   briefing: "Chuẩn bị",
   connecting: "Đang kết nối...",
@@ -243,6 +263,7 @@ const BossChallenge = ({
   const vadRef = useRef<VoiceActivityDetector | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const statusRef = useRef<FightStatus>("briefing");
+  const finalizingRef = useRef(false);
 
   const progress = (turn / maxTurns) * 100;
   const passed = (finalScore ?? 0) >= passScore;
@@ -380,6 +401,7 @@ const BossChallenge = ({
       }
 
       if (is_final) {
+        finalizingRef.current = true;
         setFinalScore(score ?? null);
         setFinalFeedback(feedback ?? "");
         setResultData(result);
@@ -387,11 +409,29 @@ const BossChallenge = ({
         return;
       }
 
+      const computedTurn = newTurn ?? turn + 1;
+      const shouldForceFinish =
+        nextUserHp <= 0 ||
+        nextBossHp <= 0 ||
+        computedTurn >= maxTurns ||
+        hasFarewellSignal(transcript) ||
+        hasFarewellSignal(reply);
+
+      if (shouldForceFinish) {
+        if (!finalizingRef.current) {
+          finalizingRef.current = true;
+          pauseListening();
+          if (wsRef.current) sendWsControl(wsRef.current, "finish");
+        }
+        setStatusSynced("processing");
+        return;
+      }
+
       // Resume listening for next turn
       vadRef.current?.resume();
       setStatusSynced("listening");
     },
-    [userHp, bossHp, turn, pauseListening, setStatusSynced],
+    [userHp, bossHp, turn, pauseListening, setStatusSynced, maxTurns],
   );
 
   // ─── Initialize WebSocket in background while user reads briefing ───────────
@@ -411,7 +451,11 @@ const BossChallenge = ({
               toast({ title: "Mất kết nối với Boss", variant: "destructive" });
           },
           () => {
-            if (!cancelled && statusRef.current !== "finished") {
+            if (
+              !cancelled &&
+              statusRef.current !== "finished" &&
+              !finalizingRef.current
+            ) {
               toast({
                 title: "Kết nối đóng, bạn có thể thử lại.",
                 variant: "destructive",
@@ -444,6 +488,7 @@ const BossChallenge = ({
   // ─── User clicks "Sẵn sàng" on the briefing screen ───────────────────────
 
   const handleStartFight = useCallback(async () => {
+    finalizingRef.current = false;
     setStatusSynced("connecting");
     // Show greeting in chat
     setMessages([{ role: "assistant", content: greetingText }]);

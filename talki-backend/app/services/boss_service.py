@@ -13,6 +13,31 @@ from app.services import tts_service
 from app.services.stt_service import transcribe_audio
 
 
+def _has_farewell_signal(text: str) -> bool:
+    """Heuristic to detect natural conversation ending phrases."""
+    norm = str(text or "").strip().lower()
+    if not norm:
+        return False
+
+    farewell_keywords = [
+        "tam biet",
+        "tạm biệt",
+        "bye",
+        "goodbye",
+        "hen gap lai",
+        "hẹn gặp lại",
+        "ket thuc",
+        "kết thúc",
+        "dung o day",
+        "dừng ở đây",
+        "thoi nhe",
+        "thôi nhé",
+        "chao nhe",
+        "chào nhé",
+    ]
+    return any(k in norm for k in farewell_keywords)
+
+
 # ─── Prompt builder ────────────────────────────────────────────────────────────
 
 def build_boss_system_prompt(
@@ -306,6 +331,19 @@ async def process_audio_turn(
     session.boss_hp = new_boss_hp
     session.user_hp = new_user_hp
     await db.commit()
+
+    should_finalize_now = (
+        new_boss_hp <= 0
+        or new_user_hp <= 0
+        or session.turn_count >= session.max_turns
+        or _has_farewell_signal(transcript)
+        or _has_farewell_signal(reply_text)
+    )
+
+    if should_finalize_now:
+        # Finalize immediately so client never gets stuck when HP hits 0
+        # or when either side already signals a natural ending.
+        return await boss_evaluate(db, session)
 
     # 6. TTS for boss reply
     audio_b64 = ""
