@@ -4,7 +4,7 @@ import json
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,12 +19,22 @@ router = APIRouter(prefix="/boss", tags=["boss"])
 
 # ─── Pydantic schemas ─────────────────────────────────────────────────────────
 
+class ScenarioOut(BaseModel):
+    title: str
+    context: str
+    greeting_opener: str
+
+
+class PersonalityOut(BaseModel):
+    eng_key: str
+    vi_display: str
+
 class BossConfigOut(BaseModel):
     id: str
     target_id: str
     config_type: str
-    scenarios: list[str]
-    personalities: list[str]
+    scenarios: list[ScenarioOut]
+    personalities: list[PersonalityOut]
     created_at: Optional[str] = None
 
     class Config:
@@ -34,15 +44,68 @@ class BossConfigOut(BaseModel):
 class BossConfigCreate(BaseModel):
     target_id: str
     config_type: str = "stage"
-    scenarios: list[str]
-    personalities: list[str]
+    scenarios: list[ScenarioOut]
+    personalities: list[PersonalityOut]
 
 
 class BossConfigUpdate(BaseModel):
     target_id: Optional[str] = None
     config_type: Optional[str] = None
-    scenarios: Optional[list[str]] = None
-    personalities: Optional[list[str]] = None
+    scenarios: Optional[list[ScenarioOut]] = None
+    personalities: Optional[list[PersonalityOut]] = None
+
+
+def _normalize_scenarios(raw: list | None) -> list[ScenarioOut]:
+    out: list[ScenarioOut] = []
+    for item in raw or []:
+        if isinstance(item, dict):
+            out.append(
+                ScenarioOut(
+                    title=str(item.get("title", "Tình huống")),
+                    context=str(item.get("context", "")),
+                    greeting_opener=str(item.get("greeting_opener", "Chào bạn!")),
+                )
+            )
+        else:
+            text = str(item)
+            out.append(
+                ScenarioOut(
+                    title="Tình huống",
+                    context=text,
+                    greeting_opener="Chào bạn!",
+                )
+            )
+    return out
+
+
+def _normalize_personalities(raw: list | None) -> list[PersonalityOut]:
+    out: list[PersonalityOut] = []
+    for item in raw or []:
+        if isinstance(item, dict):
+            out.append(
+                PersonalityOut(
+                    eng_key=str(item.get("eng_key", "neutral")),
+                    vi_display=str(item.get("vi_display", "Trung lập")),
+                )
+            )
+        else:
+            text = str(item)
+            if "-" in text:
+                parts = text.split("-", 1)
+                out.append(
+                    PersonalityOut(
+                        eng_key=parts[0].strip(),
+                        vi_display=parts[1].strip(),
+                    )
+                )
+            else:
+                out.append(
+                    PersonalityOut(
+                        eng_key="neutral",
+                        vi_display=text,
+                    )
+                )
+    return out
 
 
 class CreateSessionRequest(BaseModel):
@@ -54,8 +117,8 @@ class CreateSessionRequest(BaseModel):
 
 class SessionOut(BaseModel):
     session_id: str
-    scenario: str
-    personality: str
+    scenario: str  # Display string version of scenario context
+    personality: str  # Display name of personality
     max_turns: int
     pass_score: int
     greeting_text: str
@@ -64,8 +127,8 @@ class SessionOut(BaseModel):
 
 class SessionHistoryOut(BaseModel):
     id: str
-    scenario: str
-    personality: str
+    scenario: str  # Display string version of scenario context
+    personality: str  # Display name of personality
     final_score: Optional[int]
     passed: Optional[bool]
     turn_count: int
@@ -85,8 +148,8 @@ async def list_boss_configs(db: AsyncSession = Depends(get_db)):
             id=str(c.id),
             target_id=c.target_id,
             config_type=c.config_type,
-            scenarios=c.scenarios or [],
-            personalities=c.personalities or [],
+            scenarios=_normalize_scenarios(c.scenarios),
+            personalities=_normalize_personalities(c.personalities),
             created_at=c.created_at.isoformat() if c.created_at else None,
         )
         for c in configs
@@ -115,14 +178,18 @@ async def create_boss_session(
     greeting_audio_b64 = ""
     try:
         from app.services import tts_service
-        greeting_audio_b64 = await tts_service.synthesize_base64(greeting_text, session.personality)
-    except Exception:
-        pass
+        personality_str = str(session.personality)
+        greeting_audio_b64 = await tts_service.synthesize_base64(greeting_text, personality_str)
+    except Exception as e:
+        print(f"[Boss TTS] Greeting synthesis failed: {e}")
+
+    scenario_display = str(session.scenario)
+    personality_display = str(session.personality)
 
     return SessionOut(
         session_id=str(session.id),
-        scenario=session.scenario,
-        personality=session.personality,
+        scenario=scenario_display,
+        personality=personality_display,
         max_turns=session.max_turns,
         pass_score=session.pass_score,
         greeting_text=greeting_text,
@@ -146,8 +213,8 @@ async def get_my_sessions(
     return [
         SessionHistoryOut(
             id=str(s.id),
-            scenario=s.scenario,
-            personality=s.personality,
+            scenario=str(s.scenario),
+            personality=str(s.personality),
             final_score=s.final_score,
             passed=s.passed,
             turn_count=s.turn_count,
@@ -173,17 +240,32 @@ async def get_my_sessions(
 async def boss_websocket(
     session_id: str,
     websocket: WebSocket,
+    token: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
     """
     WebSocket endpoint for real-time voice boss fight.
 
-    Authentication: pass token as query param ?token=<jwt>
+    Authentication: pass JWT token as query param ?token=<jwt>
     The client sends raw audio bytes (WebM/Opus) per turn.
     The server returns JSON with transcript, reply text, audio (base64 MP3),
     HP updates, and optionally final scores.
     """
     await websocket.accept()
+
+    # ── Auth via token query param ───────────────────────────────────────────
+    if not token:
+        await websocket.send_text(json.dumps({"type": "error", "message": "Missing auth token"}))
+        await websocket.close(code=4001)
+        return
+
+    try:
+        from app.core.security import verify_token_get_user_id
+        user_id = await verify_token_get_user_id(token)
+    except Exception:
+        await websocket.send_text(json.dumps({"type": "error", "message": "Invalid or expired token"}))
+        await websocket.close(code=4001)
+        return
 
     # Load session
     try:

@@ -13,6 +13,31 @@ from app.services import tts_service
 from app.services.stt_service import transcribe_audio
 
 
+def _has_farewell_signal(text: str) -> bool:
+    """Heuristic to detect natural conversation ending phrases."""
+    norm = str(text or "").strip().lower()
+    if not norm:
+        return False
+
+    farewell_keywords = [
+        "tam biet",
+        "tạm biệt",
+        "bye",
+        "goodbye",
+        "hen gap lai",
+        "hẹn gặp lại",
+        "ket thuc",
+        "kết thúc",
+        "dung o day",
+        "dừng ở đây",
+        "thoi nhe",
+        "thôi nhé",
+        "chao nhe",
+        "chào nhé",
+    ]
+    return any(k in norm for k in farewell_keywords)
+
+
 # ─── Prompt builder ────────────────────────────────────────────────────────────
 
 def build_boss_system_prompt(
@@ -22,48 +47,56 @@ def build_boss_system_prompt(
     max_turns: int,
 ) -> str:
     """Build the system prompt for the boss character based on current turn."""
+    scenario_context = str(scenario or "Bạn gặp một tình huống giao tiếp thực tế.")
+    
     phase_hint = ""
     progress = turn_count / max_turns
     if progress < 0.3:
         phase_hint = (
-            "Đây là đầu cuộc trò chuyện. Hãy giới thiệu bản thân và đặt bối cảnh tình huống "
-            "một cách tự nhiên. Câu đầu tiên cần ngắn và thu hút người dùng vào cuộc trò chuyện."
+            "Đây là đầu cuộc trò chuyện. Hãy phản ứng tự nhiên, tiếp tục phát triển tình huống "
+            "và khiến người dùng muốn nói chuyện thêm."
         )
     elif progress < 0.7:
         phase_hint = (
-            "Cuộc trò chuyện đang diễn ra. Hãy phản hồi và đặt câu hỏi ngược lại để thử thách "
-            "và kéo người dùng tiếp tục nói chuyện."
+            "Cuộc trò chuyện đang diễn ra bình thường. Hãy phản hồi, đặt câu hỏi, hoặc chia sẻ "
+            "để tạo ra đối thoại tự nhiên và thực tế."
         )
     else:
         phase_hint = (
-            "Cuộc trò chuyện sắp kết thúc. Hãy tổng kết cuộc trò chuyện một cách tự nhiên "
-            "và kết thúc tình huống một cách hợp lý."
+            "Cuộc trò chuyện sắp kết thúc. Hãy kết thúc tương tác một cách tự nhiên."
         )
 
-    return f"""Bạn đang đóng vai một nhân vật trong tình huống giao tiếp tiếng Việt thực tế.
+    return f"""HƯỚNG DẪN QUAN TRỌNG: Bạn là một NGƯỜI THẬT trong cuộc sống hàng ngày, KHÔNG phải:
+- Sợ lý ảo hay trợ thủ AI
+- Giáo viên hoặc hướng dẫn viên
+- Người đang kiểm tra hay đánh giá ai
 
-THÔNG TIN VAI DIỄN:
-- Tình huống: {scenario}
-- Tính cách / Vai diễn: {personality}
+Bạn là một người bình thường đang trò chuyện với một người khác.
+
+TÌNH HUỐNG THỰC TẾ:
+{scenario_context}
+
+TÊN/TÍNH CÁCH CÓ THỂ CÓ (để tham khảo):
+{personality}
 
 GIAI ĐOẠN HIỆN TẠI (lượt {turn_count + 1}/{max_turns}):
 {phase_hint}
 
 NGUYÊN TẮC BẮT BUỘC:
-- Luôn ở trong vai, KHÔNG bao giờ thoát vai hoặc giải thích rằng bạn là AI.
-- Chỉ trả lời bằng tiếng Việt, tự nhiên như người Việt thực sự nói chuyện.
-- Câu trả lời NGẮN (1-3 câu). Tình huống phải thực tế và gần gũi như ngoài đời thật.
-- Phản ứng tương xứng với tính cách của vai diễn.
-- Nếu người dùng nói không rõ hoặc lạc đề, hãy nhẹ nhàng kéo họ về tình huống.
-- KHÔNG giảng đạo hay giải thích ngữ pháp. Bạn chỉ là nhân vật, không phải giáo viên.
+- Luôn ở trong vai, coi mình là người trong cuộc và hành động như thật.
+- Chỉ trả lời bằng tiếng Việt, tự nhiên và thoải mái.
+- Câu trả lời NGẮN (1-3 câu). Không bao giờ nhắc tới "tình huống", "luyện tập", hay "kiểm tra".
+- Phản ứng chân thực theo tính cách và bối cảnh của bạn.
+- Nếu người dùng nói không rõ, hãy hỏi lại bình thường ("Sao vậy?", "Cái gì?").
+- Không bao giờ ra vẻ giáo viên hay nhận xét lỗi ngữ pháp. Chỉ nói chuyện tự nhiên.
 
 JSON OUTPUT:
 Bạn PHẢI trả về kết quả theo định dạng JSON sau (chỉ JSON, không kèm giải thích):
 {{
-  "reply": "<câu trả lời của nhân vật>",
+  "reply": "<câu trả lời tự nhiên của bạn>",
   "filler_count": <số lần người dùng dùng từ đệm như ừm, à, ờ, thì, là>,
   "fluency_score": <điểm 0-100 đánh giá sự mạch lạc của người dùng trong lượt này>,
-  "content_score": <điểm 0-100 đánh giá nội dung phù hợp tình huống>
+  "content_score": <điểm 0-100 đánh giá nội dung phù hợp với tình huống>
 }}"""
 
 
@@ -73,17 +106,17 @@ def build_evaluation_prompt(
     conversation_history: list[dict],
 ) -> str:
     """Build the final evaluation prompt for scoring the full session."""
-    transcript = "\n".join(
+    scenario_context = str(scenario or "")
+    trajectory = "\n".join(
         f"{'NGƯỜI DÙNG' if m['role'] == 'user' else 'BOSS'}: {m['content']}"
         for m in conversation_history
     )
     return f"""Bạn là chuyên gia đánh giá kỹ năng giao tiếp tiếng Việt.
 
-TÌNH HUỐNG: {scenario}
-VAI DIỄN ĐỐI DIỆN: {personality}
+TÌNH HUỐNG: {scenario_context}
 
 LỊCH SỬ HỘI THOẠI:
-{transcript}
+{trajectory}
 
 Hãy đánh giá kỹ năng giao tiếp của NGƯỜI DÙNG và trả về JSON:
 {{
@@ -113,21 +146,30 @@ async def get_config_for_target(
     Find the best matching BossConfig for a given target.
     Falls back to 'default' config if no specific one found.
     """
-    result = await db.execute(
-        select(BossConfig).where(
-            BossConfig.target_id == target_id,
-            BossConfig.config_type == config_type,
-        )
-    )
-    config = result.scalars().first()
-    if config:
-        return config
+    norm_target = (target_id or "").strip().lower()
+    norm_type = (config_type or "stage").strip().lower()
 
-    # Fallback to default
-    result = await db.execute(
-        select(BossConfig).where(BossConfig.config_type == "default")
-    )
-    return result.scalars().first()
+    # 1) Exact match by normalized target + config_type
+    result = await db.execute(select(BossConfig))
+    all_configs = list(result.scalars().all())
+
+    for c in all_configs:
+        if (c.config_type or "").strip().lower() == norm_type and (c.target_id or "").strip().lower() == norm_target:
+            return c
+
+    # 2) If request is lesson but missing, try stage with same target
+    if norm_type == "lesson":
+        for c in all_configs:
+            if (c.config_type or "").strip().lower() == "stage" and (c.target_id or "").strip().lower() == norm_target:
+                return c
+
+    # 3) Fallback to explicit default config
+    for c in all_configs:
+        if (c.config_type or "").strip().lower() == "default":
+            return c
+
+    # 4) Last resort: any config (oldest first from list_configs ordering behavior)
+    return all_configs[0] if all_configs else None
 
 
 async def create_session(
@@ -141,28 +183,74 @@ async def create_session(
     """
     Create a new boss fight session.
     Returns (session, greeting_text).
+    
+    Handles both new object-based scenarios/personalities and legacy string formats.
     """
     config = await get_config_for_target(db, target_id, config_type)
 
     # Pick a random scenario and personality
     scenarios = config.scenarios if config and config.scenarios else [
-        "Bạn gặp một tình huống giao tiếp thực tế."
+        {
+            "title": "Hang xom kho tinh hoi viec lam",
+            "context": "Ban gap hang xom hay soi moi, ho hoi lien tuc ve cong viec va thu nhap cua ban.",
+            "greeting_opener": "Dao nay thay ban o nha nhieu, cong viec sao roi?",
+        },
+        {
+            "title": "Dong nghiep day loi trong hop",
+            "context": "Trong buoi hop nhom, mot dong nghiep day loi sang ban truoc mat moi nguoi.",
+            "greeting_opener": "Van de nay do ben ban xu ly cham, ban noi gi di?",
+        },
+        {
+            "title": "Chu nha tang gia thue dot ngot",
+            "context": "Chu nha bao tang gia thue cao hon kha nang cua ban, ban can thuong luong.",
+            "greeting_opener": "Thang sau tang them 2 trieu nhe, gia thi truong gio vay roi.",
+        },
+        {
+            "title": "Ban cu muon vay tien",
+            "context": "Mot nguoi ban cu nhan tin vay tien them mot lan nua, du truoc do tra no rat tre.",
+            "greeting_opener": "Giup toi lan nay nua thoi, toi hua se tra dung han.",
+        },
+        {
+            "title": "Tai xe cong nghe cau gat",
+            "context": "Tai xe den don nhung cau gat va phan nan vi diem don, khong khi bat dau cang thang.",
+            "greeting_opener": "Ban dat diem don gi ma kho tim vay?",
+        },
     ]
     personalities = config.personalities if config and config.personalities else [
-        "neutral and professional - trung lập và chuyên nghiệp"
+        {"eng_key": "pushy-neighbor", "vi_display": "Hang xom soi moi"},
+        {"eng_key": "passive-aggressive-colleague", "vi_display": "Dong nghiep da xeo"},
+        {"eng_key": "hardline-landlord", "vi_display": "Chu nha cuong"},
+        {"eng_key": "sweet-talker-borrower", "vi_display": "Ban cuoi ngot"},
+        {"eng_key": "grumpy-driver", "vi_display": "Tai xe cau gat"},
     ]
 
-    scenario = random.choice(scenarios)
-    personality = random.choice(personalities)
+    scenario_index = random.randrange(len(scenarios))
+    selected_scenario = scenarios[scenario_index]
+    if isinstance(selected_scenario, str):
+        selected_scenario = {
+            "title": "Tình huống giao tiếp",
+            "context": selected_scenario,
+            "greeting_opener": "Chào bạn!",
+        }
 
-    # Extract display name from "english key - vietnamese display" format
-    boss_name = personality.split("-")[-1].strip().capitalize() if "-" in personality else personality
+    # Keep personality aligned with the selected scenario by index.
+    selected_personality = personalities[scenario_index % len(personalities)]
+    if isinstance(selected_personality, str):
+        parts = selected_personality.split("-") if "-" in selected_personality else ["neutral", selected_personality]
+        selected_personality = {
+            "eng_key": parts[0].strip(),
+            "vi_display": parts[-1].strip() if len(parts) > 1 else selected_personality,
+        }
+
+    scenario_context = str(selected_scenario.get("context", "Bạn gặp một tình huống giao tiếp thực tế.")).strip()
+    greeting_opener = str(selected_scenario.get("greeting_opener", "Chào bạn!")).strip()
+    personality_display = str(selected_personality.get("vi_display", "Trung lập")).strip()
 
     session = BossSession(
         user_id=user_id,
         boss_config_id=config.id if config else None,
-        scenario=scenario,
-        personality=personality,
+        scenario=scenario_context,
+        personality=personality_display,
         conversation_history=[],
         turn_count=0,
         max_turns=max_turns,
@@ -174,7 +262,8 @@ async def create_session(
     await db.commit()
     await db.refresh(session)
 
-    greeting = f"Xin chào! {scenario}. Hãy bắt đầu nào!"
+    # Use scenario's greeting_opener as the boss's first greeting
+    greeting = greeting_opener or "Chào bạn!"
     return session, greeting
 
 
@@ -243,12 +332,27 @@ async def process_audio_turn(
     session.user_hp = new_user_hp
     await db.commit()
 
+    should_finalize_now = (
+        new_boss_hp <= 0
+        or new_user_hp <= 0
+        or session.turn_count >= session.max_turns
+        or _has_farewell_signal(transcript)
+        or _has_farewell_signal(reply_text)
+    )
+
+    if should_finalize_now:
+        # Finalize immediately so client never gets stuck when HP hits 0
+        # or when either side already signals a natural ending.
+        return await boss_evaluate(db, session)
+
     # 6. TTS for boss reply
     audio_b64 = ""
     try:
-        audio_b64 = await tts_service.synthesize_base64(reply_text, session.personality)
-    except Exception:
-        pass  # Non-fatal; FE shows text even if TTS fails
+        # Extract personality string for voice selection
+        personality_str = session.personality.get("vi_display", "neutral") if isinstance(session.personality, dict) else str(session.personality)
+        audio_b64 = await tts_service.synthesize_base64(reply_text, personality_str)
+    except Exception as e:
+        print(f"[Boss TTS] Turn synthesis failed: {e}")
 
     return {
         "transcript": transcript,
@@ -301,9 +405,11 @@ async def boss_evaluate(
     closing = f"Cuộc trò chuyện kết thúc. {feedback}"
     audio_b64 = ""
     try:
-        audio_b64 = await tts_service.synthesize_base64(closing[:200], session.personality)
-    except Exception:
-        pass
+        # Extract personality string for voice selection
+        personality_str = session.personality.get("vi_display", "neutral") if isinstance(session.personality, dict) else str(session.personality)
+        audio_b64 = await tts_service.synthesize_base64(closing[:200], personality_str)
+    except Exception as e:
+        print(f"[Boss TTS] Final synthesis failed: {e}")
 
     return {
         "transcript": last_transcript,

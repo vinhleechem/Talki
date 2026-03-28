@@ -8,9 +8,13 @@ services:
       - ./talki-backend/.env # Đọc biến môi trường từ file .env của backend
     volumes:
       - ./talki-backend:/app # Mount code → hot-reload hoạt động
+      - type: bind
+        source: ${GOOGLE_CREDENTIALS_HOST_PATH}
+        target: /keys/google-credentials.json
+        read_only: true
     environment:
       - WATCHFILES_FORCE_POLLING=1
-      - GOOGLE_CLOUD_CREDENTIALS_JSON=/keys/talki-490106-da64ab764488.json
+      - GOOGLE_APPLICATION_CREDENTIALS=/keys/google-credentials.json
     restart: unless-stopped
 
   frontend:

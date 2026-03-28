@@ -1,5 +1,6 @@
 """Google Cloud Text-to-Speech — synthesize Vietnamese audio for Boss replies."""
 import base64
+import html
 import json
 import os
 from pathlib import Path
@@ -21,7 +22,11 @@ def _get_client():
             "pip install google-cloud-texttospeech"
         )
 
-    raw = (settings.GOOGLE_CLOUD_CREDENTIALS_JSON or "").strip()
+    raw = (getattr(settings, "GOOGLE_CLOUD_CREDENTIALS_JSON", "") or "").strip()
+    if not raw:
+        raw = (os.getenv("GOOGLE_CLOUD_CREDENTIALS_JSON") or "").strip()
+    if not raw:
+        raw = (os.getenv("GOOGLE_APPLICATION_CREDENTIALS") or "").strip()
     if raw.startswith("{"):
         # Inline JSON credentials
         info = json.loads(raw)
@@ -69,6 +74,31 @@ def _pick_voice(personality: str) -> str:
     return VOICE_MAP["default"]
 
 
+def _pick_prosody(personality: str) -> tuple[str, str, str]:
+    """Return (rate, pitch, volume_gain_db) based on personality hints."""
+    p = (personality or "").lower()
+
+    if any(k in p for k in ["gắt", "cau gat", "grumpy", "hardline", "cuong"]):
+        return ("103%", "+1st", "+1dB")
+    if any(k in p for k in ["vui", "than thien", "friendly", "enthusiastic", "ngot"]):
+        return ("100%", "+2st", "+2dB")
+    if any(k in p for k in ["da xeo", "passive", "aggressive", "soi moi", "pushy"]):
+        return ("104%", "+0st", "+1dB")
+    return ("100%", "+0st", "+0dB")
+
+
+def _build_ssml(text: str, personality: str) -> str:
+    safe_text = html.escape((text or "")[:500])
+    rate, pitch, volume = _pick_prosody(personality)
+    return (
+        "<speak>"
+        f"<prosody rate=\"{rate}\" pitch=\"{pitch}\" volume=\"{volume}\">"
+        f"{safe_text}"
+        "</prosody>"
+        "</speak>"
+    )
+
+
 async def synthesize(text: str, personality: str = "") -> bytes:
     """
     Convert text to Vietnamese speech.
@@ -80,22 +110,27 @@ async def synthesize(text: str, personality: str = "") -> bytes:
     client = _get_client()
     voice_name = _pick_voice(personality)
 
-    synthesis_input = texttospeech.SynthesisInput(text=text[:500])  # cap at 500 chars
+    ssml = _build_ssml(text, personality)
+    synthesis_input = texttospeech.SynthesisInput(ssml=ssml)
     voice = texttospeech.VoiceSelectionParams(
         language_code="vi-VN",
         name=voice_name,
     )
-    audio_config = texttospeech.AudioConfig(
-        audio_encoding=texttospeech.AudioEncoding.MP3,
-        speaking_rate=1.0,
-        pitch=0.0,
-    )
+    audio_config = texttospeech.AudioConfig(audio_encoding=texttospeech.AudioEncoding.MP3)
 
-    response = client.synthesize_speech(
-        input=synthesis_input,
-        voice=voice,
-        audio_config=audio_config,
-    )
+    try:
+        response = client.synthesize_speech(
+            input=synthesis_input,
+            voice=voice,
+            audio_config=audio_config,
+        )
+    except Exception:
+        # Fallback to plain text synthesis if SSML parsing fails.
+        response = client.synthesize_speech(
+            input=texttospeech.SynthesisInput(text=text[:500]),
+            voice=voice,
+            audio_config=audio_config,
+        )
     return response.audio_content
 
 
