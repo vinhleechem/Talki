@@ -21,7 +21,11 @@ def _get_client():
             "pip install google-cloud-texttospeech"
         )
 
-    raw = (settings.GOOGLE_CLOUD_CREDENTIALS_JSON or "").strip()
+    raw = (getattr(settings, "GOOGLE_CLOUD_CREDENTIALS_JSON", "") or "").strip()
+    if not raw:
+        raw = (os.getenv("GOOGLE_CLOUD_CREDENTIALS_JSON") or "").strip()
+    if not raw:
+        raw = (os.getenv("GOOGLE_APPLICATION_CREDENTIALS") or "").strip()
     if raw.startswith("{"):
         # Inline JSON credentials
         info = json.loads(raw)

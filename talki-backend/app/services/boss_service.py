@@ -174,7 +174,10 @@ async def create_session(
     await db.commit()
     await db.refresh(session)
 
-    greeting = f"Xin chào! {scenario}. Hãy bắt đầu nào!"
+    greeting = (
+        f"Xin chào! {scenario}. "
+        "Bạn thử bắt đầu trước nhé: trong tình huống này, bạn sẽ nói gì đầu tiên?"
+    )
     return session, greeting
 
 
@@ -247,8 +250,8 @@ async def process_audio_turn(
     audio_b64 = ""
     try:
         audio_b64 = await tts_service.synthesize_base64(reply_text, session.personality)
-    except Exception:
-        pass  # Non-fatal; FE shows text even if TTS fails
+    except Exception as e:
+        print(f"[Boss TTS] Turn synthesis failed: {e}")
 
     return {
         "transcript": transcript,
@@ -302,8 +305,8 @@ async def boss_evaluate(
     audio_b64 = ""
     try:
         audio_b64 = await tts_service.synthesize_base64(closing[:200], session.personality)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[Boss TTS] Final synthesis failed: {e}")
 
     return {
         "transcript": last_transcript,

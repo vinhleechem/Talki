@@ -116,8 +116,8 @@ async def create_boss_session(
     try:
         from app.services import tts_service
         greeting_audio_b64 = await tts_service.synthesize_base64(greeting_text, session.personality)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[Boss TTS] Greeting synthesis failed: {e}")
 
     return SessionOut(
         session_id=str(session.id),

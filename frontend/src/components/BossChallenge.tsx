@@ -16,20 +16,25 @@ import {
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { VoiceActivityDetector } from "@/utils/voiceRecorder";
-import { openBossWebSocket, sendAudioToWs, sendWsControl } from "@/services/bossApi";
+import {
+  openBossWebSocket,
+  sendAudioToWs,
+  sendWsControl,
+} from "@/services/bossApi";
 import type { BossTurnResult } from "@/services/bossApi";
 import Navbar from "@/components/Navbar";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type FightStatus =
-  | "connecting"    // Creating WS connection
+  | "briefing" // Intro screen — user reads the scenario
+  | "connecting" // Creating WS connection
   | "boss-speaking" // Boss audio playing
-  | "listening"     // VAD active, waiting for user
+  | "listening" // VAD active, waiting for user
   | "user-speaking" // VAD detected user voice
-  | "processing"    // Audio sent, waiting WS response
-  | "idle"          // Turn complete, about to auto-resume
-  | "finished";     // Session complete
+  | "processing" // Audio sent, waiting WS response
+  | "idle" // Turn complete, can manually trigger
+  | "finished"; // Session complete
 
 interface TurnLog {
   turn: number;
@@ -55,34 +60,54 @@ interface BossChallengeProps {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function playBase64Audio(b64: string): Promise<void> {
+function playBase64Audio(b64: string, mime = "audio/mpeg"): Promise<void> {
   return new Promise((resolve) => {
-    if (!b64) { resolve(); return; }
-    const audio = new Audio(`data:audio/mp3;base64,${b64}`);
-    audio.onended = () => resolve();
-    audio.onerror = () => resolve(); // non-fatal
-    audio.play().catch(() => resolve());
+    if (!b64) {
+      console.warn("[BossAudio] No audio data provided");
+      resolve();
+      return;
+    }
+    try {
+      const src = `data:${mime};base64,${b64}`;
+      const audio = new Audio(src);
+      audio.onended = () => resolve();
+      audio.onerror = (e) => {
+        console.error("[BossAudio] playback error:", e);
+        resolve(); // non-fatal
+      };
+      const p = audio.play();
+      if (p)
+        p.catch((e) => {
+          console.error("[BossAudio] play() rejected:", e);
+          resolve();
+        });
+    } catch (e) {
+      console.error("[BossAudio] constructor error:", e);
+      resolve();
+    }
   });
 }
 
 const STATUS_LABEL: Record<FightStatus, string> = {
-  connecting:     "Đang kết nối...",
-  "boss-speaking":"Boss đang nói 🎙️",
-  listening:      "Bạn nói đi 👂",
-  "user-speaking":"Đang nghe bạn... 🗣️",
-  processing:     "Boss đang suy nghĩ ⏳",
-  idle:           "Chuẩn bị...",
-  finished:       "Kết thúc",
+  briefing: "Chuẩn bị",
+  connecting: "Đang kết nối...",
+  "boss-speaking": "Boss đang nói 🎙️",
+  listening: "Bạn nói đi 👂",
+  "user-speaking": "Đang nghe bạn... 🗣️",
+  processing: "Boss đang suy nghĩ ⏳",
+  idle: "Chuẩn bị...",
+  finished: "Kết thúc",
 };
 
 const STATUS_COLOR: Record<FightStatus, string> = {
-  connecting:     "#94a3b8",
-  "boss-speaking":"#7c3aed",
-  listening:      "#16a34a",
-  "user-speaking":"#ea580c",
-  processing:     "#0ea5e9",
-  idle:           "#64748b",
-  finished:       "#94a3b8",
+  briefing: "#64748b",
+  connecting: "#94a3b8",
+  "boss-speaking": "#7c3aed",
+  listening: "#16a34a",
+  "user-speaking": "#ea580c",
+  processing: "#0ea5e9",
+  idle: "#64748b",
+  finished: "#94a3b8",
 };
 
 // ─── Animated waveform ────────────────────────────────────────────────────────
@@ -99,11 +124,12 @@ function Waveform({ status }: { status: FightStatus }) {
           className="w-[3px] rounded-full"
           style={{
             backgroundColor: color,
-            height: (active || bossActive) ? `${6 + (i % 4) * 4}px` : "3px",
+            height: active || bossActive ? `${6 + (i % 4) * 4}px` : "3px",
             transition: "height 0.15s ease, background-color 0.3s",
-            animation: (active || bossActive)
-              ? `wave ${0.4 + i * 0.06}s ease-in-out infinite alternate`
-              : "none",
+            animation:
+              active || bossActive
+                ? `wave ${0.4 + i * 0.06}s ease-in-out infinite alternate`
+                : "none",
           }}
         />
       ))}
@@ -114,7 +140,13 @@ function Waveform({ status }: { status: FightStatus }) {
 
 // ─── Damage popup ─────────────────────────────────────────────────────────────
 
-function DamagePopup({ damage, side }: { damage: number; side: "user" | "boss" }) {
+function DamagePopup({
+  damage,
+  side,
+}: {
+  damage: number;
+  side: "user" | "boss";
+}) {
   return (
     <div
       className={`absolute top-[-8px] ${side === "boss" ? "right-2" : "left-2"} pointer-events-none z-10`}
@@ -130,19 +162,36 @@ function DamagePopup({ damage, side }: { damage: number; side: "user" | "boss" }
 
 // ─── HP bar with shake ────────────────────────────────────────────────────────
 
-function HpBar({ value, label, icon, shake }: { value: number; label: string; icon: React.ReactNode; shake: boolean }) {
+function HpBar({
+  value,
+  label,
+  icon,
+  shake,
+}: {
+  value: number;
+  label: string;
+  icon: React.ReactNode;
+  shake: boolean;
+}) {
   return (
     <div className={shake ? "animate-[shake_0.4s_ease]" : ""}>
       <style>{`@keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 75%{transform:translateX(4px)} }`}</style>
       <div className="flex items-center gap-2 mb-1">
         {icon}
         <span className="text-xs font-black">{label}</span>
-        <span className="text-xs font-bold text-muted-foreground ml-auto">{value}/100</span>
+        <span className="text-xs font-bold text-muted-foreground ml-auto">
+          {value}/100
+        </span>
       </div>
       <Progress
         value={value}
         className="h-2.5"
-        style={{ "--progress-color": value > 30 ? undefined : "hsl(var(--destructive))" } as React.CSSProperties}
+        style={
+          {
+            "--progress-color":
+              value > 30 ? undefined : "hsl(var(--destructive))",
+          } as React.CSSProperties
+        }
       />
     </div>
   );
@@ -169,8 +218,10 @@ const BossChallenge = ({
   const [userHp, setUserHp] = useState(100);
   const [bossHp, setBossHp] = useState(100);
   const [turn, setTurn] = useState(0);
-  const [status, setStatus] = useState<FightStatus>("connecting");
-  const [messages, setMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
+  const [status, setStatus] = useState<FightStatus>("briefing");
+  const [messages, setMessages] = useState<
+    { role: "user" | "assistant"; content: string }[]
+  >([]);
   const [turnLogs, setTurnLogs] = useState<TurnLog[]>([]);
 
   // Result
@@ -181,13 +232,17 @@ const BossChallenge = ({
   // HP shake animations
   const [shakeUser, setShakeUser] = useState(false);
   const [shakeBoss, setShakeBoss] = useState(false);
-  const [damagePopup, setDamagePopup] = useState<{ key: number; damage: number; side: "user" | "boss" } | null>(null);
+  const [damagePopup, setDamagePopup] = useState<{
+    key: number;
+    damage: number;
+    side: "user" | "boss";
+  } | null>(null);
 
   // Refs
   const wsRef = useRef<WebSocket | null>(null);
   const vadRef = useRef<VoiceActivityDetector | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
-  const statusRef = useRef<FightStatus>("connecting");
+  const statusRef = useRef<FightStatus>("briefing");
 
   const progress = (turn / maxTurns) * 100;
   const passed = (finalScore ?? 0) >= passScore;
@@ -212,13 +267,18 @@ const BossChallenge = ({
       await vadRef.current.start(
         // onSpeechEnd — user stopped speaking
         (blob) => {
-          if (statusRef.current !== "listening" && statusRef.current !== "user-speaking") return;
+          if (
+            statusRef.current !== "listening" &&
+            statusRef.current !== "user-speaking"
+          )
+            return;
           setStatusSynced("processing");
           if (wsRef.current) sendAudioToWs(wsRef.current, blob);
         },
         // onSpeechStart — user started speaking
         () => {
-          if (statusRef.current === "listening") setStatusSynced("user-speaking");
+          if (statusRef.current === "listening")
+            setStatusSynced("user-speaking");
         },
       );
       setStatusSynced("listening");
@@ -233,122 +293,170 @@ const BossChallenge = ({
 
   // ─── Handle WS turn result ─────────────────────────────────────────────────
 
-  const handleTurnResult = useCallback(async (result: BossTurnResult) => {
-    if (result.type === "processing") {
-      setStatusSynced("processing");
-      return;
-    }
-    if (result.type !== "turn_result") return;
+  const handleTurnResult = useCallback(
+    async (result: BossTurnResult) => {
+      if (result.type === "processing") {
+        setStatusSynced("processing");
+        return;
+      }
+      if (result.type !== "turn_result") return;
 
-    const { transcript, reply, audio_b64, damage_to_boss = 0, damage_to_user = 0,
-            filler_count = 0, user_hp, boss_hp, turn: newTurn, is_final,
-            score, feedback } = result;
+      const {
+        transcript,
+        reply,
+        audio_b64,
+        damage_to_boss = 0,
+        damage_to_user = 0,
+        filler_count = 0,
+        user_hp,
+        boss_hp,
+        turn: newTurn,
+        is_final,
+        score,
+        feedback,
+      } = result;
 
-    // Update chat
-    if (transcript) {
-      setMessages((prev) => [...prev, { role: "user", content: transcript }]);
-    }
-    if (reply) {
-      setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
-    }
+      // Update chat
+      if (transcript) {
+        setMessages((prev) => [...prev, { role: "user", content: transcript }]);
+      }
+      if (reply) {
+        setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
+      }
 
-    // Update HP
-    const nextUserHp = user_hp ?? Math.max(0, userHp - damage_to_user);
-    const nextBossHp = boss_hp ?? Math.max(0, bossHp - damage_to_boss);
+      // Update HP
+      const nextUserHp = user_hp ?? Math.max(0, userHp - damage_to_user);
+      const nextBossHp = boss_hp ?? Math.max(0, bossHp - damage_to_boss);
 
-    if (damage_to_boss > 0) {
-      setDamagePopup({ key: Date.now(), damage: damage_to_boss, side: "boss" });
-      setShakeBoss(true);
-      setTimeout(() => { setShakeBoss(false); setDamagePopup(null); }, 1800);
-    }
-    if (damage_to_user > 0) {
-      setTimeout(() => {
-        setDamagePopup({ key: Date.now() + 1, damage: damage_to_user, side: "user" });
-        setShakeUser(true);
-        setTimeout(() => { setShakeUser(false); setDamagePopup(null); }, 1800);
-      }, 400);
-    }
+      if (damage_to_boss > 0) {
+        setDamagePopup({
+          key: Date.now(),
+          damage: damage_to_boss,
+          side: "boss",
+        });
+        setShakeBoss(true);
+        setTimeout(() => {
+          setShakeBoss(false);
+          setDamagePopup(null);
+        }, 1800);
+      }
+      if (damage_to_user > 0) {
+        setTimeout(() => {
+          setDamagePopup({
+            key: Date.now() + 1,
+            damage: damage_to_user,
+            side: "user",
+          });
+          setShakeUser(true);
+          setTimeout(() => {
+            setShakeUser(false);
+            setDamagePopup(null);
+          }, 1800);
+        }, 400);
+      }
 
-    setUserHp(nextUserHp);
-    setBossHp(nextBossHp);
-    if (newTurn !== undefined) setTurn(newTurn);
+      setUserHp(nextUserHp);
+      setBossHp(nextBossHp);
+      if (newTurn !== undefined) setTurn(newTurn);
 
-    // Add turn log
-    setTurnLogs((prev) => [...prev, {
-      turn: newTurn ?? turn + 1,
-      transcript: transcript ?? "",
-      bossReply: reply ?? "",
-      damageToBoss: damage_to_boss,
-      damageToUser: damage_to_user,
-      fillerCount: filler_count,
-    }]);
+      // Add turn log
+      setTurnLogs((prev) => [
+        ...prev,
+        {
+          turn: newTurn ?? turn + 1,
+          transcript: transcript ?? "",
+          bossReply: reply ?? "",
+          damageToBoss: damage_to_boss,
+          damageToUser: damage_to_user,
+          fillerCount: filler_count,
+        },
+      ]);
 
-    // Play boss reply audio
-    if (audio_b64) {
-      setStatusSynced("boss-speaking");
-      pauseListening();
-      await playBase64Audio(audio_b64);
-    }
+      // Play boss reply audio
+      if (audio_b64) {
+        setStatusSynced("boss-speaking");
+        pauseListening();
+        await playBase64Audio(audio_b64);
+      }
 
-    if (is_final) {
-      setFinalScore(score ?? null);
-      setFinalFeedback(feedback ?? "");
-      setResultData(result);
-      setStatusSynced("finished");
-      return;
-    }
+      if (is_final) {
+        setFinalScore(score ?? null);
+        setFinalFeedback(feedback ?? "");
+        setResultData(result);
+        setStatusSynced("finished");
+        return;
+      }
 
-    // Resume listening for next turn
-    vadRef.current?.resume();
-    setStatusSynced("listening");
-  }, [userHp, bossHp, turn, pauseListening, setStatusSynced]);
+      // Resume listening for next turn
+      vadRef.current?.resume();
+      setStatusSynced("listening");
+    },
+    [userHp, bossHp, turn, pauseListening, setStatusSynced],
+  );
 
-  // ─── Initialize WebSocket + play greeting ─────────────────────────────────
+  // ─── Initialize WebSocket in background while user reads briefing ───────────
 
   useEffect(() => {
     let cancelled = false;
 
-    async function init() {
+    async function connectWs() {
       try {
-        // Connect WebSocket
         const ws = await openBossWebSocket(
           sessionId,
-          (result) => { if (!cancelled) handleTurnResult(result); },
-          () => { if (!cancelled) toast({ title: "Mất kết nối với Boss", variant: "destructive" }); },
-          () => { if (!cancelled && statusRef.current !== "finished") {
-            toast({ title: "Kết nối đóng, bạn có thể thử lại.", variant: "destructive" });
-          }},
+          (result) => {
+            if (!cancelled) handleTurnResult(result);
+          },
+          () => {
+            if (!cancelled)
+              toast({ title: "Mất kết nối với Boss", variant: "destructive" });
+          },
+          () => {
+            if (!cancelled && statusRef.current !== "finished") {
+              toast({
+                title: "Kết nối đóng, bạn có thể thử lại.",
+                variant: "destructive",
+              });
+            }
+          },
         );
-        if (cancelled) { ws.close(); return; }
-        wsRef.current = ws;
-
-        // Show greeting in chat
-        setMessages([{ role: "assistant", content: greetingText }]);
-
-        // Play greeting audio
-        setStatusSynced("boss-speaking");
-        await playBase64Audio(greetingAudioB64);
-        if (cancelled) return;
-
-        // Start VAD listening
-        await startListening();
+        if (!cancelled) wsRef.current = ws;
+        else ws.close();
       } catch (e) {
-        if (!cancelled) {
-          toast({ title: "Không thể bắt đầu Boss Fight", description: String(e), variant: "destructive" });
-          setStatusSynced("idle");
-        }
+        if (!cancelled)
+          toast({
+            title: "Không thể kết nối Boss Fight",
+            description: String(e),
+            variant: "destructive",
+          });
       }
     }
 
-    init();
+    connectWs();
 
     return () => {
       cancelled = true;
       vadRef.current?.stop();
       wsRef.current?.close();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
+
+  // ─── User clicks "Sẵn sàng" on the briefing screen ───────────────────────
+
+  const handleStartFight = useCallback(async () => {
+    setStatusSynced("connecting");
+    // Show greeting in chat
+    setMessages([{ role: "assistant", content: greetingText }]);
+
+    // Play greeting audio (Boss speaks first)
+    if (greetingAudioB64) {
+      setStatusSynced("boss-speaking");
+      await playBase64Audio(greetingAudioB64);
+    }
+
+    // Now start VAD listening
+    await startListening();
+  }, [greetingText, greetingAudioB64, startListening, setStatusSynced]);
 
   // ─── Manual finish ─────────────────────────────────────────────────────────
 
@@ -356,6 +464,90 @@ const BossChallenge = ({
     if (wsRef.current) sendWsControl(wsRef.current, "finish");
     setStatusSynced("processing");
   };
+
+  // ─── Briefing screen ──────────────────────────────────────────────────────
+
+  if (status === "briefing") {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <div className="container mx-auto px-4 pt-24 max-w-xl">
+          <div className="bg-card neo-border neo-shadow rounded-sm p-8 space-y-6">
+            {/* Boss avatar */}
+            <div className="flex items-center gap-4">
+              <div
+                className="w-16 h-16 rounded-full flex items-center justify-center text-3xl font-black text-white flex-shrink-0"
+                style={{
+                  backgroundColor: bossColor,
+                  border: "3px solid black",
+                }}
+              >
+                {bossAvatarLetter}
+              </div>
+              <div>
+                <p className="text-xs font-bold uppercase text-muted-foreground">
+                  Boss
+                </p>
+                <h2 className="text-2xl font-black">{bossName}</h2>
+                <p className="text-sm text-muted-foreground">
+                  {personalityName}
+                </p>
+              </div>
+            </div>
+
+            {/* Scenario */}
+            <div className="bg-muted neo-border rounded-sm p-5">
+              <p className="text-xs font-black uppercase text-muted-foreground mb-2">
+                📍 Tình huống
+              </p>
+              <p className="text-base font-medium leading-relaxed">
+                {scenario}
+              </p>
+            </div>
+
+            {/* Rules */}
+            <div className="space-y-2 text-sm text-muted-foreground">
+              <p className="font-black text-foreground text-xs uppercase">
+                📋 Luật chơi
+              </p>
+              <p>• Nói tự nhiên bằng giọng nói — không cần bấm nút</p>
+              <p>• Tự động bắt đầu xử lý sau khi bạn dừng nói ~1.5 giây</p>
+              <p>
+                • Giao tiếp tốt → Boss mất HP · Ngập ngừng, từ đệm → Bạn mất HP
+              </p>
+              <p>• Đạt {passScore}+ điểm để vượt qua Boss</p>
+            </div>
+
+            {/* Greeting preview */}
+            {greetingText && (
+              <div className="bg-card border-l-4 border-primary pl-4 py-2">
+                <p className="text-xs font-black text-primary uppercase mb-1">
+                  Lời chào đầu tiên của Boss:
+                </p>
+                <p className="text-sm italic text-muted-foreground">
+                  "{greetingText}"
+                </p>
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-2">
+              <Button variant="outline" onClick={() => navigate("/roadmap")}>
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Thoát
+              </Button>
+              <Button
+                className="flex-1 text-base font-black py-5"
+                onClick={handleStartFight}
+              >
+                <Mic className="w-5 h-5 mr-2" />
+                Sẵn sàng — Bắt đầu!
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ─── Result screen ─────────────────────────────────────────────────────────
 
@@ -367,16 +559,26 @@ const BossChallenge = ({
           <div className="bg-card neo-border neo-shadow rounded-sm p-8 text-center space-y-6">
             <div
               className="w-24 h-24 rounded-full mx-auto flex items-center justify-center text-4xl"
-              style={{ backgroundColor: passed ? "#dcfce7" : "#fee2e2", border: "3px solid black" }}
+              style={{
+                backgroundColor: passed ? "#dcfce7" : "#fee2e2",
+                border: "3px solid black",
+              }}
             >
               {passed ? "🏆" : "💪"}
             </div>
             <div>
-              <h2 className="text-3xl font-black">{passed ? "Boss bị đánh bại! 🎉" : "Thử lại nào! 💪"}</h2>
-              <p className="text-muted-foreground text-sm mt-1">{bossName} · {personalityName}</p>
+              <h2 className="text-3xl font-black">
+                {passed ? "Boss bị đánh bại! 🎉" : "Thử lại nào! 💪"}
+              </h2>
+              <p className="text-muted-foreground text-sm mt-1">
+                {bossName} · {personalityName}
+              </p>
             </div>
 
-            <div className="text-6xl font-black" style={{ color: passed ? "#16a34a" : "#dc2626" }}>
+            <div
+              className="text-6xl font-black"
+              style={{ color: passed ? "#16a34a" : "#dc2626" }}
+            >
               {finalScore ?? "--"}/100
             </div>
 
@@ -388,9 +590,16 @@ const BossChallenge = ({
                   { label: "Tự tin", val: resultData.confidence_score },
                   { label: "Nội dung", val: resultData.content_score },
                 ].map(({ label, val }) => (
-                  <div key={label} className="bg-muted neo-border rounded-sm p-3">
-                    <p className="text-xs font-black text-muted-foreground uppercase">{label}</p>
-                    <p className="text-2xl font-black">{val ? Math.round(val) : "--"}</p>
+                  <div
+                    key={label}
+                    className="bg-muted neo-border rounded-sm p-3"
+                  >
+                    <p className="text-xs font-black text-muted-foreground uppercase">
+                      {label}
+                    </p>
+                    <p className="text-2xl font-black">
+                      {val ? Math.round(val) : "--"}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -399,36 +608,61 @@ const BossChallenge = ({
             {/* HP summary */}
             <div className="grid grid-cols-2 gap-4 text-left">
               <div className="bg-muted neo-border rounded-sm p-4">
-                <p className="text-xs font-black uppercase text-muted-foreground mb-2">HP của bạn</p>
+                <p className="text-xs font-black uppercase text-muted-foreground mb-2">
+                  HP của bạn
+                </p>
                 <Progress value={userHp} className="h-3 mb-1" />
                 <p className="text-sm font-bold">{userHp}/100</p>
               </div>
               <div className="bg-muted neo-border rounded-sm p-4">
-                <p className="text-xs font-black uppercase text-muted-foreground mb-2">HP Boss</p>
+                <p className="text-xs font-black uppercase text-muted-foreground mb-2">
+                  HP Boss
+                </p>
                 <Progress value={bossHp} className="h-3 mb-1" />
                 <p className="text-sm font-bold">{bossHp}/100</p>
               </div>
             </div>
 
             {/* Filler words */}
-            {resultData?.filler_total !== undefined && resultData.filler_total > 0 && (
-              <p className="text-sm text-muted-foreground neo-border bg-muted rounded-sm p-3">
-                ⚠️ Bạn dùng <strong>{resultData.filler_total}</strong> từ đệm (ừm, à, ờ...) trong toàn bộ cuộc trò chuyện
-              </p>
-            )}
+            {resultData?.filler_total !== undefined &&
+              resultData.filler_total > 0 && (
+                <p className="text-sm text-muted-foreground neo-border bg-muted rounded-sm p-3">
+                  ⚠️ Bạn dùng <strong>{resultData.filler_total}</strong> từ đệm
+                  (ừm, à, ờ...) trong toàn bộ cuộc trò chuyện
+                </p>
+              )}
 
             {/* Turn history */}
             <div className="text-left space-y-2">
-              <p className="text-xs font-black uppercase text-muted-foreground">Lịch sử trận đấu</p>
+              <p className="text-xs font-black uppercase text-muted-foreground">
+                Lịch sử trận đấu
+              </p>
               {turnLogs.map((r) => (
-                <div key={r.turn} className="bg-muted rounded-sm p-3 text-xs neo-border">
+                <div
+                  key={r.turn}
+                  className="bg-muted rounded-sm p-3 text-xs neo-border"
+                >
                   <div className="flex justify-between mb-1 gap-2 flex-wrap">
                     <span className="font-black">Lượt {r.turn}</span>
-                    {r.damageToBoss > 0 && <span className="text-primary font-bold">⚔️ -{r.damageToBoss} Boss HP</span>}
-                    {r.damageToUser > 0 && <span className="text-destructive font-bold">🩸 -{r.damageToUser} HP bạn</span>}
-                    {r.fillerCount > 0 && <span className="text-amber-600 font-bold">💬 {r.fillerCount} từ đệm</span>}
+                    {r.damageToBoss > 0 && (
+                      <span className="text-primary font-bold">
+                        ⚔️ -{r.damageToBoss} Boss HP
+                      </span>
+                    )}
+                    {r.damageToUser > 0 && (
+                      <span className="text-destructive font-bold">
+                        🩸 -{r.damageToUser} HP bạn
+                      </span>
+                    )}
+                    {r.fillerCount > 0 && (
+                      <span className="text-amber-600 font-bold">
+                        💬 {r.fillerCount} từ đệm
+                      </span>
+                    )}
                   </div>
-                  <p className="text-muted-foreground italic break-words">"{r.transcript}"</p>
+                  <p className="text-muted-foreground italic break-words">
+                    "{r.transcript}"
+                  </p>
                 </div>
               ))}
             </div>
@@ -438,7 +672,11 @@ const BossChallenge = ({
             </p>
 
             <div className="flex gap-3">
-              <Button variant="outline" className="flex-1" onClick={() => navigate("/roadmap")}>
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => navigate("/roadmap")}
+              >
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Về Bản đồ
               </Button>
@@ -465,7 +703,11 @@ const BossChallenge = ({
       <div className="container mx-auto px-4 pt-20 max-w-3xl">
         {/* Back */}
         <div className="flex items-center gap-3 mb-4 pt-4">
-          <Button variant="outline" size="icon" onClick={() => navigate("/roadmap")}>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => navigate("/roadmap")}
+          >
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>
@@ -489,24 +731,44 @@ const BossChallenge = ({
           <div className="grid grid-cols-2 gap-4 relative">
             <div className="relative">
               {damagePopup?.side === "user" && (
-                <DamagePopup damage={damagePopup.damage} side="user" key={damagePopup.key} />
+                <DamagePopup
+                  damage={damagePopup.damage}
+                  side="user"
+                  key={damagePopup.key}
+                />
               )}
-              <HpBar value={userHp} label="Bạn" shake={shakeUser}
-                icon={<Shield className="w-4 h-4 text-primary" />} />
+              <HpBar
+                value={userHp}
+                label="Bạn"
+                shake={shakeUser}
+                icon={<Shield className="w-4 h-4 text-primary" />}
+              />
             </div>
             <div className="relative">
               {damagePopup?.side === "boss" && (
-                <DamagePopup damage={damagePopup.damage} side="boss" key={damagePopup.key} />
+                <DamagePopup
+                  damage={damagePopup.damage}
+                  side="boss"
+                  key={damagePopup.key}
+                />
               )}
-              <HpBar value={bossHp} label={bossName} shake={shakeBoss}
-                icon={<Swords className="w-4 h-4 text-destructive" />} />
+              <HpBar
+                value={bossHp}
+                label={bossName}
+                shake={shakeBoss}
+                icon={<Swords className="w-4 h-4 text-destructive" />}
+              />
             </div>
           </div>
           {/* Turn progress */}
           <div className="mt-3">
             <div className="flex justify-between text-[11px] font-bold text-muted-foreground mb-1">
-              <span>Lượt {turn}/{maxTurns}</span>
-              <span style={{ color: STATUS_COLOR[status] }}>{STATUS_LABEL[status]}</span>
+              <span>
+                Lượt {turn}/{maxTurns}
+              </span>
+              <span style={{ color: STATUS_COLOR[status] }}>
+                {STATUS_LABEL[status]}
+              </span>
             </div>
             <Progress value={progress} className="h-1" />
           </div>
@@ -532,7 +794,10 @@ const BossChallenge = ({
         {/* Chat messages */}
         <div className="space-y-3 mb-4 max-h-[38vh] overflow-y-auto pr-1 scroll-smooth">
           {messages.map((msg, idx) => (
-            <div key={idx} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+            <div
+              key={idx}
+              className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+            >
               <div
                 className={`max-w-[82%] px-4 py-3 neo-border rounded-sm text-sm font-medium leading-relaxed ${
                   msg.role === "user"
@@ -548,7 +813,9 @@ const BossChallenge = ({
             <div className="flex justify-start">
               <div className="bg-muted neo-border rounded-sm px-4 py-3 flex items-center gap-2">
                 <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">Boss đang suy nghĩ...</span>
+                <span className="text-sm text-muted-foreground">
+                  Boss đang suy nghĩ...
+                </span>
               </div>
             </div>
           )}
