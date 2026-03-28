@@ -4,12 +4,18 @@ import { Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import BossChallenge from "@/components/BossChallenge";
 import { bossApi } from "@/services/bossApi";
-import type { AdminBossConfig } from "@/types";
 import type { BossSessionResponse } from "@/services/bossApi";
 
 // ─── Boss avatar config ───────────────────────────────────────────────────────
 
-const BOSS_COLORS = ["#FF6B35", "#7C3AED", "#0EA5E9", "#16A34A", "#DC2626", "#EA580C"];
+const BOSS_COLORS = [
+  "#FF6B35",
+  "#7C3AED",
+  "#0EA5E9",
+  "#16A34A",
+  "#DC2626",
+  "#EA580C",
+];
 
 function getBossVisual(personalityName: string, stageId: number) {
   const color = BOSS_COLORS[stageId % BOSS_COLORS.length];
@@ -36,11 +42,10 @@ const BossChallengeWrapper = () => {
     lessonTitle?: string;
   } | null;
 
-  const [loadState, setLoadState] = useState<
-    "loading" | "ready" | "error"
-  >("loading");
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "error">(
+    "loading",
+  );
   const [errorMsg, setErrorMsg] = useState("");
-  const [config, setConfig] = useState<AdminBossConfig | null>(null);
   const [session, setSession] = useState<BossSessionResponse | null>(null);
 
   useEffect(() => {
@@ -48,29 +53,44 @@ const BossChallengeWrapper = () => {
 
     async function boot() {
       try {
-        // Fetch all boss configs from BE
+        // Production matching rule: lesson -> stage -> default
         const configs = await bossApi.listConfigs();
+        const normalize = (v?: string) => (v || "").trim().toLowerCase();
 
-        const configType: AdminBossConfig["config_type"] =
-          state!.stageTitle && !state!.lessonTitle ? "stage" : "lesson";
-        const targetId = state!.lessonTitle ?? state!.stageTitle ?? "default";
+        const lessonTitle = state!.lessonTitle?.trim();
+        const stageTitle = state!.stageTitle?.trim();
 
-        // Find best matching config; fall back gracefully
-        const matched =
-          configs.find(
-            (c) => c.target_id === targetId && c.config_type === configType,
-          ) ??
-          configs.find((c) => c.config_type === "default") ??
-          configs[0];
+        const matchedLesson = lessonTitle
+          ? configs.find(
+              (c) =>
+                c.config_type === "lesson" &&
+                normalize(c.target_id) === normalize(lessonTitle),
+            )
+          : undefined;
 
-        if (!matched) throw new Error("Chưa có cấu hình Boss cho bài này. Admin hãy thêm vào Dashboard.");
+        const matchedStage = stageTitle
+          ? configs.find(
+              (c) =>
+                c.config_type === "stage" &&
+                normalize(c.target_id) === normalize(stageTitle),
+            )
+          : undefined;
 
-        setConfig(matched);
+        const matchedDefault =
+          configs.find((c) => c.config_type === "default") ?? configs[0];
+
+        const resolved = matchedLesson ?? matchedStage ?? matchedDefault;
+
+        if (!resolved) {
+          throw new Error(
+            "Chưa có cấu hình Boss. Admin cần tạo ít nhất 1 cấu hình default.",
+          );
+        }
 
         // Create session — BE picks scenario + personality for us
         const sess = await bossApi.createSession({
-          target_id: matched.target_id,
-          config_type: matched.config_type,
+          target_id: resolved.target_id,
+          config_type: resolved.config_type,
           max_turns: 7,
           pass_score: 60,
         });
@@ -78,13 +98,15 @@ const BossChallengeWrapper = () => {
         setSession(sess);
         setLoadState("ready");
       } catch (e) {
-        setErrorMsg(e instanceof Error ? e.message : "Không thể bắt đầu Boss Fight");
+        setErrorMsg(
+          e instanceof Error ? e.message : "Không thể bắt đầu Boss Fight",
+        );
         setLoadState("error");
       }
     }
 
     boot();
-  }, []);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!state) return <Navigate to="/roadmap" replace />;
 
@@ -93,13 +115,15 @@ const BossChallengeWrapper = () => {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4">
         <Loader2 className="w-10 h-10 animate-spin text-primary" />
-        <p className="font-bold text-muted-foreground">Đang chuẩn bị Boss Fight...</p>
+        <p className="font-bold text-muted-foreground">
+          Đang chuẩn bị Boss Fight...
+        </p>
       </div>
     );
   }
 
   // ── Error ──
-  if (loadState === "error" || !session || !config) {
+  if (loadState === "error" || !session) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-6 text-center">
         <AlertCircle className="w-12 h-12 text-destructive" />

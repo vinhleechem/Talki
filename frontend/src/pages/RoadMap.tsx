@@ -26,7 +26,10 @@ const RoadMap = () => {
     fetchChapters();
   }, []);
 
-  const isLessonUnlocked = (chapterIndex: number, lessonIndex: number): boolean => {
+  const isLessonUnlocked = (
+    chapterIndex: number,
+    lessonIndex: number,
+  ): boolean => {
     // Luôn mở khóa bài đầu tiên của chapter đầu tiên
     if (chapterIndex === 0 && lessonIndex === 0) return true;
 
@@ -57,7 +60,10 @@ const RoadMap = () => {
     const chapter = chapters[chapterIndex];
     if (!chapter) return null;
     for (let i = 0; i < chapter.lessons.length; i++) {
-      if (isLessonUnlocked(chapterIndex, i) && !chapter.lessons[i].is_completed) {
+      if (
+        isLessonUnlocked(chapterIndex, i) &&
+        !chapter.lessons[i].is_completed
+      ) {
         return chapter.lessons[i].id;
       }
     }
@@ -66,12 +72,23 @@ const RoadMap = () => {
 
   const handleLessonClick = (lessonIndex: number, chapterIndex: number) => {
     if (!isLessonUnlocked(chapterIndex, lessonIndex)) return;
-    navigate("/practice", { state: { lesson: chapters[chapterIndex].lessons[lessonIndex], chapter: chapters[chapterIndex] } });
+    navigate("/practice", {
+      state: {
+        lesson: chapters[chapterIndex].lessons[lessonIndex],
+        chapter: chapters[chapterIndex],
+      },
+    });
   };
 
   const handleBossClick = (chapter: Chapter) => {
     if (!chapter.boss || !chapter.boss.is_unlocked) return;
-    navigate("/boss-challenge", { state: { stageId: chapter.id, stageTitle: chapter.title, boss: chapter.boss } });
+    navigate("/boss-challenge", {
+      state: {
+        stageId: chapter.id,
+        stageTitle: chapter.title,
+        boss: chapter.boss,
+      },
+    });
   };
 
   if (loading) {
@@ -117,7 +134,9 @@ const RoadMap = () => {
                 {/* Chapter label */}
                 <div
                   className={`inline-block px-4 py-1 font-black uppercase neo-shadow text-sm tracking-wider ${
-                    stageUnlocked ? "bg-foreground text-background" : "bg-muted-foreground/60 text-white"
+                    stageUnlocked
+                      ? "bg-foreground text-background"
+                      : "bg-muted-foreground/60 text-white"
                   }`}
                 >
                   Chapter {stageIndex + 1}: {chapter.title}
@@ -127,18 +146,25 @@ const RoadMap = () => {
                   {/* Scenes grid */}
                   <div
                     className={`grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-2xl mx-auto ${
-                      !stageUnlocked ? "opacity-60 grayscale pointer-events-none" : ""
+                      !stageUnlocked
+                        ? "opacity-60 grayscale pointer-events-none"
+                        : ""
                     }`}
                   >
                     {chapter.lessons.map((lesson, lessonIndex) => {
-                      const unlocked = isLessonUnlocked(stageIndex, lessonIndex);
+                      const unlocked = isLessonUnlocked(
+                        stageIndex,
+                        lessonIndex,
+                      );
                       const completed = lesson.is_completed;
                       const isCurrent = lesson.id === currentLessonId;
 
                       return (
                         <button
                           key={lesson.id}
-                          onClick={() => handleLessonClick(lessonIndex, stageIndex)}
+                          onClick={() =>
+                            handleLessonClick(lessonIndex, stageIndex)
+                          }
                           disabled={!unlocked}
                           className={`relative neo-border p-6 text-left min-h-[100px] flex items-center justify-between transition-all ${
                             completed
@@ -151,11 +177,17 @@ const RoadMap = () => {
                           }`}
                         >
                           <div className="flex-1 pr-2">
-                            <span className="font-black uppercase text-sm leading-snug block">{lesson.title}</span>
+                            <span className="font-black uppercase text-sm leading-snug block">
+                              {lesson.title}
+                            </span>
                           </div>
 
-                          {!unlocked && <Lock className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
-                          {completed && <Check className="w-4 h-4 text-secondary flex-shrink-0" />}
+                          {!unlocked && (
+                            <Lock className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                          )}
+                          {completed && (
+                            <Check className="w-4 h-4 text-secondary flex-shrink-0" />
+                          )}
 
                           {/* "ĐANG HỌC" badge */}
                           {isCurrent && (
@@ -173,17 +205,23 @@ const RoadMap = () => {
                     <div
                       className={`neo-border neo-shadow p-8 flex flex-col items-center gap-4 text-center ${
                         bossUnlocked
-                            ? "bg-red-500 text-white"
-                            : "bg-muted opacity-70"
+                          ? "bg-red-500 text-white"
+                          : "bg-muted opacity-70"
                       }`}
                     >
                       <Skull className="w-14 h-14" />
                       <div>
-                        <h3 className="text-2xl font-black uppercase italic">Boss Fight</h3>
+                        <h3 className="text-2xl font-black uppercase italic">
+                          Boss Fight
+                        </h3>
                         {chapter.boss ? (
-                          <p className="text-sm font-bold opacity-90 mt-1">{chapter.boss.name}</p>
+                          <p className="text-sm font-bold opacity-90 mt-1">
+                            Boss theo cấu hình production của chapter này
+                          </p>
                         ) : (
-                          <p className="text-sm font-bold opacity-90 mt-1">Kiểm tra kiến thức {chapter.title}</p>
+                          <p className="text-sm font-bold opacity-90 mt-1">
+                            Kiểm tra kiến thức {chapter.title}
+                          </p>
                         )}
                       </div>
                       <button
@@ -196,14 +234,13 @@ const RoadMap = () => {
                         }`}
                       >
                         {bossUnlocked
-                            ? "Thách đấu"
-                            : `Hoàn thành ${chapter.boss_unlock_threshold}% bài học`}
+                          ? "Thách đấu"
+                          : `Hoàn thành ${chapter.boss_unlock_threshold}% bài học`}
                       </button>
                     </div>
                   </div>
                 </div>
               </section>
-
             </div>
           );
         })}

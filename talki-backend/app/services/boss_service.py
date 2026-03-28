@@ -121,21 +121,30 @@ async def get_config_for_target(
     Find the best matching BossConfig for a given target.
     Falls back to 'default' config if no specific one found.
     """
-    result = await db.execute(
-        select(BossConfig).where(
-            BossConfig.target_id == target_id,
-            BossConfig.config_type == config_type,
-        )
-    )
-    config = result.scalars().first()
-    if config:
-        return config
+    norm_target = (target_id or "").strip().lower()
+    norm_type = (config_type or "stage").strip().lower()
 
-    # Fallback to default
-    result = await db.execute(
-        select(BossConfig).where(BossConfig.config_type == "default")
-    )
-    return result.scalars().first()
+    # 1) Exact match by normalized target + config_type
+    result = await db.execute(select(BossConfig))
+    all_configs = list(result.scalars().all())
+
+    for c in all_configs:
+        if (c.config_type or "").strip().lower() == norm_type and (c.target_id or "").strip().lower() == norm_target:
+            return c
+
+    # 2) If request is lesson but missing, try stage with same target
+    if norm_type == "lesson":
+        for c in all_configs:
+            if (c.config_type or "").strip().lower() == "stage" and (c.target_id or "").strip().lower() == norm_target:
+                return c
+
+    # 3) Fallback to explicit default config
+    for c in all_configs:
+        if (c.config_type or "").strip().lower() == "default":
+            return c
+
+    # 4) Last resort: any config (oldest first from list_configs ordering behavior)
+    return all_configs[0] if all_configs else None
 
 
 async def create_session(
@@ -156,13 +165,42 @@ async def create_session(
 
     # Pick a random scenario and personality
     scenarios = config.scenarios if config and config.scenarios else [
-        {"title": "Tình huống giao tiếp", "context": "Bạn gặp một tình huống giao tiếp thực tế.", "greeting_opener": "Chào bạn!"}
+        {
+            "title": "Hang xom kho tinh hoi viec lam",
+            "context": "Ban gap hang xom hay soi moi, ho hoi lien tuc ve cong viec va thu nhap cua ban.",
+            "greeting_opener": "Dao nay thay ban o nha nhieu, cong viec sao roi?",
+        },
+        {
+            "title": "Dong nghiep day loi trong hop",
+            "context": "Trong buoi hop nhom, mot dong nghiep day loi sang ban truoc mat moi nguoi.",
+            "greeting_opener": "Van de nay do ben ban xu ly cham, ban noi gi di?",
+        },
+        {
+            "title": "Chu nha tang gia thue dot ngot",
+            "context": "Chu nha bao tang gia thue cao hon kha nang cua ban, ban can thuong luong.",
+            "greeting_opener": "Thang sau tang them 2 trieu nhe, gia thi truong gio vay roi.",
+        },
+        {
+            "title": "Ban cu muon vay tien",
+            "context": "Mot nguoi ban cu nhan tin vay tien them mot lan nua, du truoc do tra no rat tre.",
+            "greeting_opener": "Giup toi lan nay nua thoi, toi hua se tra dung han.",
+        },
+        {
+            "title": "Tai xe cong nghe cau gat",
+            "context": "Tai xe den don nhung cau gat va phan nan vi diem don, khong khi bat dau cang thang.",
+            "greeting_opener": "Ban dat diem don gi ma kho tim vay?",
+        },
     ]
     personalities = config.personalities if config and config.personalities else [
-        {"eng_key": "neutral", "vi_display": "Trung lập"}
+        {"eng_key": "pushy-neighbor", "vi_display": "Hang xom soi moi"},
+        {"eng_key": "passive-aggressive-colleague", "vi_display": "Dong nghiep da xeo"},
+        {"eng_key": "hardline-landlord", "vi_display": "Chu nha cuong"},
+        {"eng_key": "sweet-talker-borrower", "vi_display": "Ban cuoi ngot"},
+        {"eng_key": "grumpy-driver", "vi_display": "Tai xe cau gat"},
     ]
 
-    selected_scenario = random.choice(scenarios)
+    scenario_index = random.randrange(len(scenarios))
+    selected_scenario = scenarios[scenario_index]
     if isinstance(selected_scenario, str):
         selected_scenario = {
             "title": "Tình huống giao tiếp",
@@ -170,7 +208,8 @@ async def create_session(
             "greeting_opener": "Chào bạn!",
         }
 
-    selected_personality = random.choice(personalities)
+    # Keep personality aligned with the selected scenario by index.
+    selected_personality = personalities[scenario_index % len(personalities)]
     if isinstance(selected_personality, str):
         parts = selected_personality.split("-") if "-" in selected_personality else ["neutral", selected_personality]
         selected_personality = {

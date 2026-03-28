@@ -161,7 +161,10 @@ const pageTitles: Record<string, { title: string; sub: string }> = {
   dashboard: { title: "BẢNG ĐIỀU KHIỂN", sub: "Tổng quan hệ thống" },
   users: { title: "QUẢN LÝ NGƯỜI DÙNG", sub: "Xem và cập nhật tài khoản" },
   content: { title: "QUẢN LÝ NỘI DUNG", sub: "Quản lý chapters và lessons" },
-  boss: { title: "CÀI ĐẶT BOSS", sub: "Chỉnh sửa nhân vật Boss" },
+  boss: {
+    title: "CÀI ĐẶT BOSS",
+    sub: "Quản lý một luồng cấu hình Boss cho production",
+  },
   conversations: {
     title: "NHẬT KÝ NĂNG LƯỢNG",
     sub: "Theo dõi lesson và boss fight",
@@ -3800,39 +3803,20 @@ function ConversationsPage() {
 // ─── Boss Admin Tabs (wrapper) ────────────────────────────────────────────────
 
 function BossAdminTabs() {
-  const [bossTab, setBossTab] = useState<"characters" | "scenarios">(
-    "characters",
-  );
   return (
     <>
-      <div className="flex gap-2 mb-6">
-        <button
-          className="px-4 py-2 text-xs font-black uppercase"
-          style={{
-            border: "3px solid black",
-            boxShadow: bossTab === "characters" ? "none" : "3px 3px 0 black",
-            backgroundColor: bossTab === "characters" ? PRIMARY : "white",
-            color: bossTab === "characters" ? "white" : "#0f172a",
-          }}
-          onClick={() => setBossTab("characters")}
-        >
-          🥷 Nhân vật Boss
-        </button>
-        <button
-          className="px-4 py-2 text-xs font-black uppercase"
-          style={{
-            border: "3px solid black",
-            boxShadow: bossTab === "scenarios" ? "none" : "3px 3px 0 black",
-            backgroundColor: bossTab === "scenarios" ? PRIMARY : "white",
-            color: bossTab === "scenarios" ? "white" : "#0f172a",
-          }}
-          onClick={() => setBossTab("scenarios")}
-        >
-          🎭 Kịch bản Boss Fight
-        </button>
+      <div className="mb-4 p-3 bg-white" style={neo.card}>
+        <p className="text-xs font-black uppercase text-slate-500 mb-1">
+          Boss Production Flow
+        </p>
+        <p className="text-sm font-bold text-slate-700">
+          Một cấu hình Boss gồm: mục tiêu (lesson/stage/default) + danh sách
+          tình huống + danh sách personality.
+          <br />
+          Luồng áp dụng phía user: lesson {"->"} stage {"->"} default.
+        </p>
       </div>
-      {bossTab === "characters" && <BossCharacterPage />}
-      {bossTab === "scenarios" && <BossPage />}
+      <BossPage />
     </>
   );
 }
@@ -3851,7 +3835,102 @@ function BossPage() {
     scenarios: [{ title: "", context: "", greeting_opener: "" }],
     personalities: [{ eng_key: "", vi_display: "" }],
   };
+  const scenarioPreset: AdminBossConfig["scenarios"] = [
+    {
+      title: "Hang xom kho tinh hoi viec lam",
+      context:
+        "Ban gap nguoi hang xom hay soi moi o cau thang. Ho nhin ban roi bat dau hoi lien tiep ve cong viec, thu nhap, va vi sao gan day thay ban o nha nhieu.",
+      greeting_opener:
+        "Oi, dao nay thay ban o nha suot, cong viec on khong do?",
+    },
+    {
+      title: "Dong nghiep do loi trong nhom",
+      context:
+        "Trong buoi hop nhom, mot dong nghiep kheo leo day loi sang ban truoc mat moi nguoi. Ban can giu binh tinh, lam ro van de, va khong de cuoc hop vo thanh cai nhau.",
+      greeting_opener:
+        "Theo minh thi loi nay den tu phan ban xu ly, ban giai thich di?",
+    },
+    {
+      title: "Nguoi than hoi chuyen cuoi vo duyen",
+      context:
+        "Trong bua com gia dinh, nguoi than cu hoi khi nao cuoi va so sanh ban voi con nha nguoi ta. Khong khi dang vui de bi do vo.",
+      greeting_opener: "Tuoi nay roi ma chua tinh chuyen cuoi xin gi ha con?",
+    },
+    {
+      title: "Chu nha tang gia bat ngo",
+      context:
+        "Chu nha bao tang gia thue tu thang sau voi ly do thi truong, nhung con so vuot qua kha nang cua ban. Ban can thuong luong de tim cach hop ly.",
+      greeting_opener:
+        "Thang sau nha minh tang them 2 trieu nhe, gia chung gio vay roi.",
+    },
+    {
+      title: "Khach than phien o quan ca phe",
+      context:
+        "Ban dang order o quan thi mot khach la to tieng vi cho lau, roi quay sang ca ban de cau gat. Ban can xu ly tinh huong de khong thang.",
+      greeting_opener: "Em oi, cho gi ma lau the, hay la quen don cua toi roi?",
+    },
+    {
+      title: "Ban cu muon vay tien",
+      context:
+        "Mot nguoi ban cu nhan tin than thiet roi mo loi vay tien lan nua, du truoc day da tre hen nhieu lan. Ban muon tu choi van lich su de giu ranh gioi.",
+      greeting_opener:
+        "Giup toi lan nay nua thoi, cuoi thang chac chan toi tra, tin toi di.",
+    },
+    {
+      title: "Tai xe cong nghe noi kho nghe",
+      context:
+        "Tai xe den don nhung phan nan vi diem don va noi nang kho chiu. Ban can giai thich ro rang de tiep tuc chuyen di trong khong khi biet ton trong.",
+      greeting_opener:
+        "Diem don nhu nay sao toi vo duoc, ban co biet dat xe khong vay?",
+    },
+    {
+      title: "Ban cung phong mo nhac luc nua dem",
+      context:
+        "Ban cung phong bat nhac to luc nua dem dung luc ban can nghi de mai di lam som. Ban can noi thang nhung khong lam mat long nhau.",
+      greeting_opener:
+        "Nua dem ma sao ban van kho tinh the, toi moi bat co chut nhac thoi ma.",
+    },
+    {
+      title: "Nguoi la quay clip khi khong xin phep",
+      context:
+        "Ban dang an trong quan thi phat hien nguoi ngoi ban canh quay clip co mat ban ma khong hoi. Ban can yeu cau dung lai mot cach dt khoat.",
+      greeting_opener:
+        "Quay cho vui thoi ma, len mang co ai biet ban la ai dau.",
+    },
+    {
+      title: "Doi tac doi giam gia phut cuoi",
+      context:
+        "Ngay truoc khi ky thoa thuan, doi tac bat ngo yeu cau giam gia manh va gia bo roi ban dam phan. Ban can bao ve loi ich ma van giu quan he.",
+      greeting_opener:
+        "Neu ben ban khong giam them 20% thi chung toi dung lai tai day.",
+    },
+  ];
+  const personalityPreset: AdminBossConfig["personalities"] = [
+    { eng_key: "pushy-neighbor", vi_display: "Hang xom soi moi" },
+    {
+      eng_key: "passive-aggressive-colleague",
+      vi_display: "Dong nghiep da xeo",
+    },
+    { eng_key: "dramatic-relative", vi_display: "Nguoi than hoi xoay" },
+    { eng_key: "hardline-landlord", vi_display: "Chu nha cuong" },
+    { eng_key: "impatient-customer", vi_display: "Khach nong tinh" },
+    { eng_key: "sweet-talker-borrower", vi_display: "Ban cuo roi ngot" },
+    { eng_key: "grumpy-driver", vi_display: "Tai xe cau gat" },
+    { eng_key: "careless-roommate", vi_display: "Ban cung phong vo tu" },
+  ];
   const [form, setForm] = useState(emptyForm);
+
+  const applyPresetPack = () => {
+    setShowForm(true);
+    setEditingId(null);
+    setForm(() => ({
+      target_id: "default",
+      config_type: "default",
+      scenarios: [...scenarioPreset],
+      personalities: [...personalityPreset],
+    }));
+    toast({ title: "Da nap goi tinh huong kho do - vui nhon" });
+  };
 
   useEffect(() => {
     adminApi
@@ -3980,17 +4059,26 @@ function BossPage() {
           Quản lý kịch bản và nhân vật Boss theo từng Stage / Lesson. Hệ thống
           sẽ chọn ngẫu nhiên kịch bản phù hợp khi người dùng vào Boss Fight.
         </p>
-        <button
-          className="px-4 py-2 text-xs font-black uppercase"
-          style={{ ...neo.btn, backgroundColor: PRIMARY, color: "white" }}
-          onClick={() => {
-            setShowForm(true);
-            setEditingId(null);
-            setForm(emptyForm);
-          }}
-        >
-          + Thêm cấu hình
-        </button>
+        <div className="flex gap-2">
+          <button
+            className="px-4 py-2 text-xs font-black uppercase"
+            style={{ ...neo.btn, backgroundColor: "#0f172a", color: "white" }}
+            onClick={applyPresetPack}
+          >
+            ⚡ Nap goi mau thuc te
+          </button>
+          <button
+            className="px-4 py-2 text-xs font-black uppercase"
+            style={{ ...neo.btn, backgroundColor: PRIMARY, color: "white" }}
+            onClick={() => {
+              setShowForm(true);
+              setEditingId(null);
+              setForm(emptyForm);
+            }}
+          >
+            + Thêm cấu hình
+          </button>
+        </div>
       </div>
 
       {showForm && (

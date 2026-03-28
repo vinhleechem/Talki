@@ -178,15 +178,13 @@ async def create_boss_session(
     greeting_audio_b64 = ""
     try:
         from app.services import tts_service
-        # Extract personality string for voice selection
-        personality_str = session.personality.get("vi_display", "neutral") if isinstance(session.personality, dict) else str(session.personality)
+        personality_str = str(session.personality)
         greeting_audio_b64 = await tts_service.synthesize_base64(greeting_text, personality_str)
     except Exception as e:
         print(f"[Boss TTS] Greeting synthesis failed: {e}")
 
-    # Convert scenario/personality dicts to display strings
-    scenario_display = session.scenario.get("context", str(session.scenario)) if isinstance(session.scenario, dict) else str(session.scenario)
-    personality_display = session.personality.get("vi_display", str(session.personality)) if isinstance(session.personality, dict) else str(session.personality)
+    scenario_display = str(session.scenario)
+    personality_display = str(session.personality)
 
     return SessionOut(
         session_id=str(session.id),
@@ -215,8 +213,8 @@ async def get_my_sessions(
     return [
         SessionHistoryOut(
             id=str(s.id),
-            scenario=s.scenario.get("context", str(s.scenario)) if isinstance(s.scenario, dict) else str(s.scenario),
-            personality=s.personality.get("vi_display", str(s.personality)) if isinstance(s.personality, dict) else str(s.personality),
+            scenario=str(s.scenario),
+            personality=str(s.personality),
             final_score=s.final_score,
             passed=s.passed,
             turn_count=s.turn_count,
