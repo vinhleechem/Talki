@@ -904,12 +904,25 @@ from app.models.boss import BossConfig  # noqa: E402
 from app.services import boss_service   # noqa: E402
 
 
+class ScenarioIn(BaseModel):
+    """Scenario object with context and greeting."""
+    title: str
+    context: str
+    greeting_opener: str
+
+
+class PersonalityIn(BaseModel):
+    """Boss personality/character."""
+    eng_key: str
+    vi_display: str
+
+
 class AdminBossConfigOut(BaseModel):
     id: str
     target_id: str
     config_type: str
-    scenarios: list[str]
-    personalities: list[str]
+    scenarios: list[ScenarioIn]
+    personalities: list[PersonalityIn]
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 
@@ -917,15 +930,68 @@ class AdminBossConfigOut(BaseModel):
 class AdminBossConfigCreate(BaseModel):
     target_id: str
     config_type: str = "stage"
-    scenarios: list[str]
-    personalities: list[str]
+    scenarios: list[ScenarioIn]
+    personalities: list[PersonalityIn]
 
 
 class AdminBossConfigUpdate(BaseModel):
     target_id: Optional[str] = None
     config_type: Optional[str] = None
-    scenarios: Optional[list[str]] = None
-    personalities: Optional[list[str]] = None
+    scenarios: Optional[list[ScenarioIn]] = None
+    personalities: Optional[list[PersonalityIn]] = None
+
+
+def _normalize_scenarios(raw: list | None) -> list[ScenarioIn]:
+    out: list[ScenarioIn] = []
+    for item in raw or []:
+        if isinstance(item, dict):
+            out.append(
+                ScenarioIn(
+                    title=str(item.get("title", "Tình huống")),
+                    context=str(item.get("context", "")),
+                    greeting_opener=str(item.get("greeting_opener", "Chào bạn!")),
+                )
+            )
+        else:
+            text = str(item)
+            out.append(
+                ScenarioIn(
+                    title="Tình huống",
+                    context=text,
+                    greeting_opener="Chào bạn!",
+                )
+            )
+    return out
+
+
+def _normalize_personalities(raw: list | None) -> list[PersonalityIn]:
+    out: list[PersonalityIn] = []
+    for item in raw or []:
+        if isinstance(item, dict):
+            out.append(
+                PersonalityIn(
+                    eng_key=str(item.get("eng_key", "neutral")),
+                    vi_display=str(item.get("vi_display", "Trung lập")),
+                )
+            )
+        else:
+            text = str(item)
+            if "-" in text:
+                parts = text.split("-", 1)
+                out.append(
+                    PersonalityIn(
+                        eng_key=parts[0].strip(),
+                        vi_display=parts[1].strip(),
+                    )
+                )
+            else:
+                out.append(
+                    PersonalityIn(
+                        eng_key="neutral",
+                        vi_display=text,
+                    )
+                )
+    return out
 
 
 def _boss_config_out(c: BossConfig) -> AdminBossConfigOut:
@@ -933,8 +999,8 @@ def _boss_config_out(c: BossConfig) -> AdminBossConfigOut:
         id=str(c.id),
         target_id=c.target_id,
         config_type=c.config_type,
-        scenarios=c.scenarios or [],
-        personalities=c.personalities or [],
+        scenarios=_normalize_scenarios(c.scenarios),
+        personalities=_normalize_personalities(c.personalities),
         created_at=c.created_at.isoformat() if c.created_at else None,
         updated_at=c.updated_at.isoformat() if c.updated_at else None,
     )

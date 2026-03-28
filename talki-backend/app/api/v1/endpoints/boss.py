@@ -19,12 +19,22 @@ router = APIRouter(prefix="/boss", tags=["boss"])
 
 # ─── Pydantic schemas ─────────────────────────────────────────────────────────
 
+class ScenarioOut(BaseModel):
+    title: str
+    context: str
+    greeting_opener: str
+
+
+class PersonalityOut(BaseModel):
+    eng_key: str
+    vi_display: str
+
 class BossConfigOut(BaseModel):
     id: str
     target_id: str
     config_type: str
-    scenarios: list[str]
-    personalities: list[str]
+    scenarios: list[ScenarioOut]
+    personalities: list[PersonalityOut]
     created_at: Optional[str] = None
 
     class Config:
@@ -34,15 +44,68 @@ class BossConfigOut(BaseModel):
 class BossConfigCreate(BaseModel):
     target_id: str
     config_type: str = "stage"
-    scenarios: list[str]
-    personalities: list[str]
+    scenarios: list[ScenarioOut]
+    personalities: list[PersonalityOut]
 
 
 class BossConfigUpdate(BaseModel):
     target_id: Optional[str] = None
     config_type: Optional[str] = None
-    scenarios: Optional[list[str]] = None
-    personalities: Optional[list[str]] = None
+    scenarios: Optional[list[ScenarioOut]] = None
+    personalities: Optional[list[PersonalityOut]] = None
+
+
+def _normalize_scenarios(raw: list | None) -> list[ScenarioOut]:
+    out: list[ScenarioOut] = []
+    for item in raw or []:
+        if isinstance(item, dict):
+            out.append(
+                ScenarioOut(
+                    title=str(item.get("title", "Tình huống")),
+                    context=str(item.get("context", "")),
+                    greeting_opener=str(item.get("greeting_opener", "Chào bạn!")),
+                )
+            )
+        else:
+            text = str(item)
+            out.append(
+                ScenarioOut(
+                    title="Tình huống",
+                    context=text,
+                    greeting_opener="Chào bạn!",
+                )
+            )
+    return out
+
+
+def _normalize_personalities(raw: list | None) -> list[PersonalityOut]:
+    out: list[PersonalityOut] = []
+    for item in raw or []:
+        if isinstance(item, dict):
+            out.append(
+                PersonalityOut(
+                    eng_key=str(item.get("eng_key", "neutral")),
+                    vi_display=str(item.get("vi_display", "Trung lập")),
+                )
+            )
+        else:
+            text = str(item)
+            if "-" in text:
+                parts = text.split("-", 1)
+                out.append(
+                    PersonalityOut(
+                        eng_key=parts[0].strip(),
+                        vi_display=parts[1].strip(),
+                    )
+                )
+            else:
+                out.append(
+                    PersonalityOut(
+                        eng_key="neutral",
+                        vi_display=text,
+                    )
+                )
+    return out
 
 
 class CreateSessionRequest(BaseModel):
@@ -54,8 +117,8 @@ class CreateSessionRequest(BaseModel):
 
 class SessionOut(BaseModel):
     session_id: str
-    scenario: str
-    personality: str
+    scenario: str  # Display string version of scenario context
+    personality: str  # Display name of personality
     max_turns: int
     pass_score: int
     greeting_text: str
@@ -64,8 +127,8 @@ class SessionOut(BaseModel):
 
 class SessionHistoryOut(BaseModel):
     id: str
-    scenario: str
-    personality: str
+    scenario: str  # Display string version of scenario context
+    personality: str  # Display name of personality
     final_score: Optional[int]
     passed: Optional[bool]
     turn_count: int
@@ -85,8 +148,8 @@ async def list_boss_configs(db: AsyncSession = Depends(get_db)):
             id=str(c.id),
             target_id=c.target_id,
             config_type=c.config_type,
-            scenarios=c.scenarios or [],
-            personalities=c.personalities or [],
+            scenarios=_normalize_scenarios(c.scenarios),
+            personalities=_normalize_personalities(c.personalities),
             created_at=c.created_at.isoformat() if c.created_at else None,
         )
         for c in configs
@@ -115,14 +178,20 @@ async def create_boss_session(
     greeting_audio_b64 = ""
     try:
         from app.services import tts_service
-        greeting_audio_b64 = await tts_service.synthesize_base64(greeting_text, session.personality)
+        # Extract personality string for voice selection
+        personality_str = session.personality.get("vi_display", "neutral") if isinstance(session.personality, dict) else str(session.personality)
+        greeting_audio_b64 = await tts_service.synthesize_base64(greeting_text, personality_str)
     except Exception as e:
         print(f"[Boss TTS] Greeting synthesis failed: {e}")
 
+    # Convert scenario/personality dicts to display strings
+    scenario_display = session.scenario.get("context", str(session.scenario)) if isinstance(session.scenario, dict) else str(session.scenario)
+    personality_display = session.personality.get("vi_display", str(session.personality)) if isinstance(session.personality, dict) else str(session.personality)
+
     return SessionOut(
         session_id=str(session.id),
-        scenario=session.scenario,
-        personality=session.personality,
+        scenario=scenario_display,
+        personality=personality_display,
         max_turns=session.max_turns,
         pass_score=session.pass_score,
         greeting_text=greeting_text,
@@ -146,8 +215,8 @@ async def get_my_sessions(
     return [
         SessionHistoryOut(
             id=str(s.id),
-            scenario=s.scenario,
-            personality=s.personality,
+            scenario=s.scenario.get("context", str(s.scenario)) if isinstance(s.scenario, dict) else str(s.scenario),
+            personality=s.personality.get("vi_display", str(s.personality)) if isinstance(s.personality, dict) else str(s.personality),
             final_score=s.final_score,
             passed=s.passed,
             turn_count=s.turn_count,

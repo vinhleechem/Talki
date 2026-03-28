@@ -3800,7 +3800,9 @@ function ConversationsPage() {
 // ─── Boss Admin Tabs (wrapper) ────────────────────────────────────────────────
 
 function BossAdminTabs() {
-  const [bossTab, setBossTab] = useState<"characters" | "scenarios">("characters");
+  const [bossTab, setBossTab] = useState<"characters" | "scenarios">(
+    "characters",
+  );
   return (
     <>
       <div className="flex gap-2 mb-6">
@@ -3846,17 +3848,35 @@ function BossPage() {
   const emptyForm = {
     target_id: "",
     config_type: "stage" as AdminBossConfig["config_type"],
-    scenarios: [""],
-    personalities: [""],
+    scenarios: [{ title: "", context: "", greeting_opener: "" }],
+    personalities: [{ eng_key: "", vi_display: "" }],
   };
   const [form, setForm] = useState(emptyForm);
 
   useEffect(() => {
-    adminApi.listBossConfigs().then((data) => { setConfigs(data); setLoading(false); }).catch(handleError);
+    adminApi
+      .listBossConfigs()
+      .then((data) => {
+        setConfigs(data);
+        setLoading(false);
+      })
+      .catch(handleError);
   }, []);
 
   const handleEdit = (c: AdminBossConfig) => {
-    setForm({ target_id: c.target_id, config_type: c.config_type, scenarios: [...c.scenarios], personalities: [...c.personalities] });
+    setForm({
+      target_id: c.target_id,
+      config_type: c.config_type,
+      scenarios: c.scenarios.map((s) => ({
+        title: s.title,
+        context: s.context,
+        greeting_opener: s.greeting_opener,
+      })),
+      personalities: c.personalities.map((p) => ({
+        eng_key: p.eng_key,
+        vi_display: p.vi_display,
+      })),
+    });
     setEditingId(c.id);
     setShowForm(true);
   };
@@ -3869,17 +3889,27 @@ function BossPage() {
   };
 
   const handleSave = async () => {
-    if (!form.target_id.trim()) return toast({ title: "Vui lòng nhập tên Stage/Lesson", variant: "destructive" });
+    if (!form.target_id.trim())
+      return toast({
+        title: "Vui lòng nhập tên Stage/Lesson",
+        variant: "destructive",
+      });
     setSaving(true);
     try {
       const payload = {
         ...form,
-        scenarios: form.scenarios.filter((s) => s.trim()),
-        personalities: form.personalities.filter((p) => p.trim()),
+        scenarios: form.scenarios.filter(
+          (s) => s.title.trim() && s.context.trim() && s.greeting_opener.trim(),
+        ),
+        personalities: form.personalities.filter(
+          (p) => p.eng_key.trim() && p.vi_display.trim(),
+        ),
       };
       if (editingId) {
         const updated = await adminApi.updateBossConfig(editingId, payload);
-        setConfigs((prev) => prev.map((c) => (c.id === editingId ? updated : c)));
+        setConfigs((prev) =>
+          prev.map((c) => (c.id === editingId ? updated : c)),
+        );
         toast({ title: "Đã cập nhật cấu hình Boss" });
       } else {
         const created = await adminApi.createBossConfig(payload);
@@ -3896,15 +3926,50 @@ function BossPage() {
     }
   };
 
-  const updateScenario = (i: number, val: string) =>
-    setForm((prev) => { const s = [...prev.scenarios]; s[i] = val; return { ...prev, scenarios: s }; });
-  const addScenario = () => setForm((prev) => ({ ...prev, scenarios: [...prev.scenarios, ""] }));
-  const removeScenario = (i: number) => setForm((prev) => ({ ...prev, scenarios: prev.scenarios.filter((_, idx) => idx !== i) }));
+  const updateScenario = (
+    i: number,
+    field: "title" | "context" | "greeting_opener",
+    val: string,
+  ) =>
+    setForm((prev) => {
+      const s = [...prev.scenarios];
+      s[i] = { ...s[i], [field]: val };
+      return { ...prev, scenarios: s };
+    });
+  const addScenario = () =>
+    setForm((prev) => ({
+      ...prev,
+      scenarios: [
+        ...prev.scenarios,
+        { title: "", context: "", greeting_opener: "" },
+      ],
+    }));
+  const removeScenario = (i: number) =>
+    setForm((prev) => ({
+      ...prev,
+      scenarios: prev.scenarios.filter((_, idx) => idx !== i),
+    }));
 
-  const updatePersonality = (i: number, val: string) =>
-    setForm((prev) => { const p = [...prev.personalities]; p[i] = val; return { ...prev, personalities: p }; });
-  const addPersonality = () => setForm((prev) => ({ ...prev, personalities: [...prev.personalities, ""] }));
-  const removePersonality = (i: number) => setForm((prev) => ({ ...prev, personalities: prev.personalities.filter((_, idx) => idx !== i) }));
+  const updatePersonality = (
+    i: number,
+    field: "eng_key" | "vi_display",
+    val: string,
+  ) =>
+    setForm((prev) => {
+      const p = [...prev.personalities];
+      p[i] = { ...p[i], [field]: val };
+      return { ...prev, personalities: p };
+    });
+  const addPersonality = () =>
+    setForm((prev) => ({
+      ...prev,
+      personalities: [...prev.personalities, { eng_key: "", vi_display: "" }],
+    }));
+  const removePersonality = (i: number) =>
+    setForm((prev) => ({
+      ...prev,
+      personalities: prev.personalities.filter((_, idx) => idx !== i),
+    }));
 
   if (loading) return <Spinner />;
 
@@ -3912,12 +3977,17 @@ function BossPage() {
     <>
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm font-bold text-slate-500">
-          Quản lý kịch bản và nhân vật Boss theo từng Stage / Lesson. Hệ thống sẽ chọn ngẫu nhiên kịch bản phù hợp khi người dùng vào Boss Fight.
+          Quản lý kịch bản và nhân vật Boss theo từng Stage / Lesson. Hệ thống
+          sẽ chọn ngẫu nhiên kịch bản phù hợp khi người dùng vào Boss Fight.
         </p>
         <button
           className="px-4 py-2 text-xs font-black uppercase"
           style={{ ...neo.btn, backgroundColor: PRIMARY, color: "white" }}
-          onClick={() => { setShowForm(true); setEditingId(null); setForm(emptyForm); }}
+          onClick={() => {
+            setShowForm(true);
+            setEditingId(null);
+            setForm(emptyForm);
+          }}
         >
           + Thêm cấu hình
         </button>
@@ -3930,22 +4000,34 @@ function BossPage() {
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
-              <label className="text-xs font-black uppercase text-slate-500 block mb-1">Tên Stage / Lesson</label>
+              <label className="text-xs font-black uppercase text-slate-500 block mb-1">
+                Tên Stage / Lesson
+              </label>
               <input
                 className="w-full px-3 py-2 text-sm font-bold focus:outline-none"
                 style={{ border: "2px solid black" }}
                 placeholder="VD: Giao tiếp cơ bản"
                 value={form.target_id}
-                onChange={(e) => setForm((p) => ({ ...p, target_id: e.target.value }))}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, target_id: e.target.value }))
+                }
               />
             </div>
             <div>
-              <label className="text-xs font-black uppercase text-slate-500 block mb-1">Loại</label>
+              <label className="text-xs font-black uppercase text-slate-500 block mb-1">
+                Loại
+              </label>
               <select
                 className="w-full px-3 py-2 text-sm font-bold bg-white"
                 style={{ border: "2px solid black" }}
                 value={form.config_type}
-                onChange={(e) => setForm((p) => ({ ...p, config_type: e.target.value as AdminBossConfig["config_type"] }))}
+                onChange={(e) =>
+                  setForm((p) => ({
+                    ...p,
+                    config_type: e.target
+                      .value as AdminBossConfig["config_type"],
+                  }))
+                }
               >
                 <option value="stage">Stage (sau khi hoàn thành chương)</option>
                 <option value="lesson">Lesson (sau bài học)</option>
@@ -3957,29 +4039,60 @@ function BossPage() {
           {/* Scenarios */}
           <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-black uppercase text-slate-500">Tình huống (Scenarios)</label>
+              <label className="text-xs font-black uppercase text-slate-500">
+                Tình huống (Scenarios)
+              </label>
               <button
                 className="text-xs font-black px-2 py-1"
                 style={{ border: "2px solid black" }}
                 onClick={addScenario}
-              >+ Thêm</button>
+              >
+                + Thêm
+              </button>
             </div>
             <div className="space-y-2">
               {form.scenarios.map((s, i) => (
-                <div key={i} className="flex gap-2">
+                <div
+                  key={i}
+                  className="space-y-2 p-3"
+                  style={{ border: "2px solid black" }}
+                >
                   <input
-                    className="flex-1 px-3 py-2 text-sm font-bold focus:outline-none"
+                    className="w-full px-3 py-2 text-sm font-bold focus:outline-none"
                     style={{ border: "2px solid black" }}
-                    placeholder={`Tình huống ${i + 1}...`}
-                    value={s}
-                    onChange={(e) => updateScenario(i, e.target.value)}
+                    placeholder={`Tiêu đề tình huống ${i + 1} (VD: Hàng xóm khó tính hỏi việc làm)`}
+                    value={s.title}
+                    onChange={(e) => updateScenario(i, "title", e.target.value)}
+                  />
+                  <textarea
+                    className="w-full px-3 py-2 text-sm font-bold focus:outline-none resize-y"
+                    style={{ border: "2px solid black", minHeight: 80 }}
+                    placeholder="Bối cảnh chi tiết, càng đời thường càng tốt..."
+                    value={s.context}
+                    onChange={(e) =>
+                      updateScenario(i, "context", e.target.value)
+                    }
+                  />
+                  <input
+                    className="w-full px-3 py-2 text-sm font-bold focus:outline-none"
+                    style={{ border: "2px solid black" }}
+                    placeholder="Câu mở đầu của boss (VD: Dạo này thấy bạn ở nhà suốt, công việc sao rồi?)"
+                    value={s.greeting_opener}
+                    onChange={(e) =>
+                      updateScenario(i, "greeting_opener", e.target.value)
+                    }
                   />
                   {form.scenarios.length > 1 && (
                     <button
                       className="px-2 py-1 text-xs font-black"
-                      style={{ border: "2px solid black", backgroundColor: "#fee2e2" }}
+                      style={{
+                        border: "2px solid black",
+                        backgroundColor: "#fee2e2",
+                      }}
                       onClick={() => removeScenario(i)}
-                    >✕</button>
+                    >
+                      ✕
+                    </button>
                   )}
                 </div>
               ))}
@@ -3989,30 +4102,52 @@ function BossPage() {
           {/* Personalities */}
           <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-black uppercase text-slate-500">Tính cách Boss (Personalities)</label>
+              <label className="text-xs font-black uppercase text-slate-500">
+                Tính cách Boss (Personalities)
+              </label>
               <button
                 className="text-xs font-black px-2 py-1"
                 style={{ border: "2px solid black" }}
                 onClick={addPersonality}
-              >+ Thêm</button>
+              >
+                + Thêm
+              </button>
             </div>
-            <p className="text-[11px] text-slate-400 mb-2">Gợi ý format: <code className="bg-slate-100 px-1">friendly and enthusiastic - người bạn vui vẻ</code></p>
+            <p className="text-[11px] text-slate-400 mb-2">
+              Mỗi personality gồm mã tiếng Anh và tên hiển thị tiếng Việt.
+            </p>
             <div className="space-y-2">
               {form.personalities.map((p, i) => (
-                <div key={i} className="flex gap-2">
+                <div key={i} className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   <input
-                    className="flex-1 px-3 py-2 text-sm font-bold focus:outline-none"
+                    className="px-3 py-2 text-sm font-bold focus:outline-none"
                     style={{ border: "2px solid black" }}
-                    placeholder={`Tính cách ${i + 1}...`}
-                    value={p}
-                    onChange={(e) => updatePersonality(i, e.target.value)}
+                    placeholder="eng_key (VD: pushy-neighbor)"
+                    value={p.eng_key}
+                    onChange={(e) =>
+                      updatePersonality(i, "eng_key", e.target.value)
+                    }
+                  />
+                  <input
+                    className="px-3 py-2 text-sm font-bold focus:outline-none"
+                    style={{ border: "2px solid black" }}
+                    placeholder="vi_display (VD: Hàng xóm soi mói)"
+                    value={p.vi_display}
+                    onChange={(e) =>
+                      updatePersonality(i, "vi_display", e.target.value)
+                    }
                   />
                   {form.personalities.length > 1 && (
                     <button
                       className="px-2 py-1 text-xs font-black"
-                      style={{ border: "2px solid black", backgroundColor: "#fee2e2" }}
+                      style={{
+                        border: "2px solid black",
+                        backgroundColor: "#fee2e2",
+                      }}
                       onClick={() => removePersonality(i)}
-                    >✕</button>
+                    >
+                      ✕
+                    </button>
                   )}
                 </div>
               ))}
@@ -4031,7 +4166,11 @@ function BossPage() {
             <button
               className="px-4 py-2 text-xs font-black uppercase"
               style={{ ...neo.btn }}
-              onClick={() => { setShowForm(false); setEditingId(null); setForm(emptyForm); }}
+              onClick={() => {
+                setShowForm(false);
+                setEditingId(null);
+                setForm(emptyForm);
+              }}
             >
               Huỷ
             </button>
@@ -4043,7 +4182,9 @@ function BossPage() {
         <div className="bg-white p-12 text-center" style={neo.card}>
           <p className="text-4xl mb-3">🥊</p>
           <p className="font-black text-lg">Chưa có cấu hình Boss nào</p>
-          <p className="text-sm text-slate-500 mt-1">Nhấn "+ Thêm cấu hình" để tạo tình huống đầu tiên.</p>
+          <p className="text-sm text-slate-500 mt-1">
+            Nhấn "+ Thêm cấu hình" để tạo tình huống đầu tiên.
+          </p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -4053,7 +4194,15 @@ function BossPage() {
                 <div>
                   <span
                     className="text-[10px] font-black uppercase px-2 py-0.5 mr-2"
-                    style={{ backgroundColor: c.config_type === "stage" ? PRIMARY : c.config_type === "lesson" ? "#0ea5e9" : "#94a3b8", color: "white" }}
+                    style={{
+                      backgroundColor:
+                        c.config_type === "stage"
+                          ? PRIMARY
+                          : c.config_type === "lesson"
+                            ? "#0ea5e9"
+                            : "#94a3b8",
+                      color: "white",
+                    }}
                   >
                     {c.config_type}
                   </span>
@@ -4064,33 +4213,57 @@ function BossPage() {
                     className="px-3 py-1 text-xs font-black uppercase"
                     style={{ border: "2px solid black" }}
                     onClick={() => handleEdit(c)}
-                  >Sửa</button>
+                  >
+                    Sửa
+                  </button>
                   <button
                     className="px-3 py-1 text-xs font-black uppercase"
-                    style={{ border: "2px solid black", backgroundColor: "#fee2e2" }}
+                    style={{
+                      border: "2px solid black",
+                      backgroundColor: "#fee2e2",
+                    }}
                     onClick={() => handleDelete(c.id)}
-                  >Xoá</button>
+                  >
+                    Xoá
+                  </button>
                 </div>
               </div>
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <p className="text-xs font-black uppercase text-slate-400 mb-1">Tình huống ({c.scenarios.length})</p>
+                  <p className="text-xs font-black uppercase text-slate-400 mb-1">
+                    Tình huống ({c.scenarios.length})
+                  </p>
                   <ul className="space-y-1">
                     {c.scenarios.map((s, i) => (
                       <li key={i} className="text-xs text-slate-700 flex gap-1">
-                        <span className="font-black text-slate-400">{i + 1}.</span>
-                        <span>{s}</span>
+                        <span className="font-black text-slate-400">
+                          {i + 1}.
+                        </span>
+                        <span>
+                          <span className="font-bold">{s.title}: </span>
+                          {s.context}
+                          <span className="text-slate-500">
+                            {" "}
+                            (Mở đầu: {s.greeting_opener})
+                          </span>
+                        </span>
                       </li>
                     ))}
                   </ul>
                 </div>
                 <div>
-                  <p className="text-xs font-black uppercase text-slate-400 mb-1">Nhân cách Boss ({c.personalities.length})</p>
+                  <p className="text-xs font-black uppercase text-slate-400 mb-1">
+                    Nhân cách Boss ({c.personalities.length})
+                  </p>
                   <ul className="space-y-1">
                     {c.personalities.map((p, i) => (
                       <li key={i} className="text-xs text-slate-700 flex gap-1">
-                        <span className="font-black text-slate-400">{i + 1}.</span>
-                        <span>{p}</span>
+                        <span className="font-black text-slate-400">
+                          {i + 1}.
+                        </span>
+                        <span>
+                          {p.eng_key} - {p.vi_display}
+                        </span>
                       </li>
                     ))}
                   </ul>
