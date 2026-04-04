@@ -244,7 +244,7 @@ const BossChallenge = ({
   const [turn, setTurn] = useState(0);
   const [status, setStatus] = useState<FightStatus>("briefing");
   const [messages, setMessages] = useState<
-    { role: "user" | "assistant"; content: string }[]
+    { role: "user" | "assistant"; content: string; isOptimistic?: boolean }[]
   >([]);
   const [localUserText, setLocalUserText] = useState("");
   const [turnLogs, setTurnLogs] = useState<TurnLog[]>([]);
@@ -299,7 +299,9 @@ const BossChallenge = ({
           )
             return;
           setStatusSynced("processing");
-          if (!localTranscript) setLocalUserText("Đang phân tích...");
+          const optimText = localTranscript || "...";
+          setLocalUserText(""); // Hide real-time dashed box 
+          setMessages((prev) => [...prev, { role: "user", content: optimText, isOptimistic: true }]);
           if (wsRef.current) sendAudioToWs(wsRef.current, blob);
         },
         // onSpeechStart — user started speaking
@@ -348,7 +350,8 @@ const BossChallenge = ({
         feedback,
       } = result;
 
-      // Clear optimistic local text since we got true result
+      // Remove optimistic messages
+      setMessages((prev) => prev.filter(m => !m.isOptimistic));
       setLocalUserText("");
 
       // Update chat
@@ -860,13 +863,20 @@ const BossChallenge = ({
                   msg.role === "user"
                     ? "bg-primary text-primary-foreground"
                     : "bg-card text-foreground"
-                }`}
+                } ${msg.isOptimistic ? "opacity-70 animate-pulse border-dashed" : ""}`}
               >
-                {msg.content}
+                {msg.isOptimistic && msg.content === "..." ? (
+                  <span className="flex items-center gap-2 text-xs">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Đang giải mã giọng nói...
+                  </span>
+                ) : (
+                  msg.content
+                )}
               </div>
             </div>
           ))}
-          {localUserText && (status === "user-speaking" || status === "processing") && (
+          {localUserText && status === "user-speaking" && (
             <div className="flex justify-end">
               <div className="max-w-[82%] px-4 py-3 neo-border rounded-sm text-sm font-medium leading-relaxed bg-primary text-primary-foreground opacity-80 border-dashed">
                 {localUserText}
