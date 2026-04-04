@@ -24,6 +24,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "@/components/ui/use-toast";
+import { RefreshCw } from "lucide-react";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -4392,6 +4393,7 @@ function PaymentsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const [uploadState, setUploadState] = useState<"idle" | "uploading" | "done" | "error">("idle");
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -4719,34 +4721,48 @@ function PaymentsPage() {
       </div>
       <div className="bg-white overflow-hidden" style={neo.card}>
         <div
-          className="grid grid-cols-1 gap-2 p-4 md:grid-cols-2"
+          className="flex flex-col gap-2 p-4 md:flex-row md:items-center md:justify-between"
           style={{ borderBottom: "2px solid black" }}
         >
-          <input
-            className="px-3 py-2 text-sm font-bold focus:outline-none"
-            style={{ border: "2px solid black" }}
-            placeholder="Tìm theo user ID, gói, trạng thái, số tiền..."
-            value={searchTerm}
-            onChange={(e) => {
-              setSearchTerm(e.target.value);
-              setPage(1);
+          <div className="flex flex-1 gap-2">
+            <input
+              className="px-3 py-2 text-sm font-bold focus:outline-none flex-1"
+              style={{ border: "2px solid black" }}
+              placeholder="Tìm theo user ID, gói, trạng thái, số tiền..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setPage(1);
+              }}
+            />
+            <select
+              className="px-3 py-2 text-sm font-bold bg-white"
+              style={{ border: "2px solid black" }}
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="all">Tất cả trạng thái</option>
+              <option value="paid">paid</option>
+              <option value="pending">pending</option>
+              <option value="failed">failed</option>
+              <option value="cancelled">cancelled</option>
+            </select>
+          </div>
+          <button
+            className="flex items-center justify-center gap-2 px-4 py-2 text-xs font-black uppercase bg-white hover:bg-slate-50 transition-colors disabled:opacity-50"
+            style={neo.btn}
+            onClick={() => {
+              setIsRefreshing(true);
+              loadData().finally(() => setIsRefreshing(false));
             }}
-          />
-          <select
-            className="px-3 py-2 text-sm font-bold bg-white"
-            style={{ border: "2px solid black" }}
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value);
-              setPage(1);
-            }}
+            disabled={isRefreshing}
           >
-            <option value="all">Tất cả trạng thái</option>
-            <option value="paid">paid</option>
-            <option value="pending">pending</option>
-            <option value="failed">failed</option>
-            <option value="cancelled">cancelled</option>
-          </select>
+            <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
+            Làm mới
+          </button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
