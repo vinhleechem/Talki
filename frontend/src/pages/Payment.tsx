@@ -410,6 +410,12 @@ const Payment = () => {
                     duyệt.
                   </p>
                 )}
+                {activeOrder.admin_note && (
+                  <div className="mt-3 p-2 bg-primary/10 border border-primary/20 rounded-sm">
+                    <p className="text-[10px] font-black uppercase text-primary mb-1">Ghi chú từ Admin:</p>
+                    <p className="text-sm font-bold text-foreground italic">"{activeOrder.admin_note}"</p>
+                  </div>
+                )}
               </div>
 
               {activeOrder.status === "created" && (
@@ -468,6 +474,11 @@ const Payment = () => {
                     <p className="text-xs text-muted-foreground break-all">
                       {order.transfer_note || "(không có mã)"}
                     </p>
+                    {order.admin_note && (
+                      <p className="text-[10px] font-bold text-primary mt-1 truncate">
+                        Ghi chú: {order.admin_note}
+                      </p>
+                    )}
                   </button>
                 );
               })}
