@@ -29,6 +29,8 @@ class BossConfig(Base):
     scenarios: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     # List of personality strings ("friendly and enthusiastic - ...")
     personalities: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    # Custom image avatar URL
+    avatar_url: Mapped[str | None] = mapped_column(String, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

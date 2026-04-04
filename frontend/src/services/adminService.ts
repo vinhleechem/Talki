@@ -161,15 +161,16 @@ export const adminApi = {
     apiFetch<void>(`/admin/boss-configs/${id}`, { method: "DELETE" }),
 
   // Cloudinary
-  getUploadSignature: (resourceType = "video") =>
-    apiFetch<{
+  getUploadSignature: (resourceType = "video", folder?: string) => {
+    let url = `/admin/upload-signature?resource_type=${resourceType}`;
+    if (folder) url += `&folder=${encodeURIComponent(folder)}`;
+    return apiFetch<{
       cloud_name: string;
       api_key: string;
       timestamp: number;
       signature: string;
       folder: string;
       upload_url: string;
-    }>(`/admin/upload-signature?resource_type=${resourceType}`, {
-      method: "POST",
-    }),
+    }>(url, { method: "POST" });
+  },
 };

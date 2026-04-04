@@ -1499,7 +1499,7 @@ function ChapterCard({
     setUploadState("uploading");
     setUploadProgress(0);
     try {
-      const sig = await adminApi.getUploadSignature("video");
+      const sig = await adminApi.getUploadSignature("video", "talki/lessons");
       const form = new FormData();
       form.append("file", file);
       form.append("api_key", sig.api_key);
@@ -4400,7 +4400,7 @@ function PaymentsPage() {
     setUploadState("uploading");
     setUploadProgress(0);
     try {
-      const sig = await adminApi.getUploadSignature("image");
+      const sig = await adminApi.getUploadSignature("image", "talki/payments/qr");
       const form = new FormData();
       form.append("file", file);
       form.append("api_key", sig.api_key);
