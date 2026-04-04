@@ -60,12 +60,20 @@ interface BossChallengeProps {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function playBase64Audio(b64: string, mime = "audio/mpeg"): Promise<void> {
+function playBase64Audio(b64: string, fallbackText: string, mime = "audio/mp3"): Promise<void> {
   return new Promise((resolve) => {
-    if (!b64) {
-      console.warn("[BossAudio] No audio data provided");
-      resolve();
-      return;
+    if (!b64) { 
+      console.warn("[BossAudio] No audio data provided, falling back to browser TTS"); 
+      if ('speechSynthesis' in window && fallbackText) {
+        const utterance = new SpeechSynthesisUtterance(fallbackText);
+        utterance.lang = "vi-VN";
+        utterance.onend = () => resolve();
+        utterance.onerror = () => resolve();
+        window.speechSynthesis.speak(utterance);
+        return;
+      }
+      resolve(); 
+      return; 
     }
     try {
       const src = `data:${mime};base64,${b64}`;
@@ -76,11 +84,7 @@ function playBase64Audio(b64: string, mime = "audio/mpeg"): Promise<void> {
         resolve(); // non-fatal
       };
       const p = audio.play();
-      if (p)
-        p.catch((e) => {
-          console.error("[BossAudio] play() rejected:", e);
-          resolve();
-        });
+      if (p) p.catch((e) => { console.error("[BossAudio] play() rejected:", e); resolve(); });
     } catch (e) {
       console.error("[BossAudio] constructor error:", e);
       resolve();
@@ -242,6 +246,7 @@ const BossChallenge = ({
   const [messages, setMessages] = useState<
     { role: "user" | "assistant"; content: string }[]
   >([]);
+  const [localUserText, setLocalUserText] = useState("");
   const [turnLogs, setTurnLogs] = useState<TurnLog[]>([]);
 
   // Result
@@ -287,20 +292,26 @@ const BossChallenge = ({
     try {
       await vadRef.current.start(
         // onSpeechEnd — user stopped speaking
-        (blob) => {
+        (blob, localTranscript) => {
           if (
             statusRef.current !== "listening" &&
             statusRef.current !== "user-speaking"
           )
             return;
           setStatusSynced("processing");
+          if (!localTranscript) setLocalUserText("Đang phân tích...");
           if (wsRef.current) sendAudioToWs(wsRef.current, blob);
         },
         // onSpeechStart — user started speaking
         () => {
           if (statusRef.current === "listening")
             setStatusSynced("user-speaking");
+          setLocalUserText("...");
         },
+        // onSpeechUpdate
+        (text) => {
+          if (text) setLocalUserText(text);
+        }
       );
       setStatusSynced("listening");
     } catch {
@@ -336,6 +347,9 @@ const BossChallenge = ({
         score,
         feedback,
       } = result;
+
+      // Clear optimistic local text since we got true result
+      setLocalUserText("");
 
       // Update chat
       if (transcript) {
@@ -394,10 +408,10 @@ const BossChallenge = ({
       ]);
 
       // Play boss reply audio
-      if (audio_b64) {
+      if (reply && !is_final) {
         setStatusSynced("boss-speaking");
         pauseListening();
-        await playBase64Audio(audio_b64);
+        await playBase64Audio(audio_b64 || "", reply);
       }
 
       if (is_final) {
@@ -494,10 +508,8 @@ const BossChallenge = ({
     setMessages([{ role: "assistant", content: greetingText }]);
 
     // Play greeting audio (Boss speaks first)
-    if (greetingAudioB64) {
-      setStatusSynced("boss-speaking");
-      await playBase64Audio(greetingAudioB64);
-    }
+    setStatusSynced("boss-speaking");
+    await playBase64Audio(greetingAudioB64 || "", greetingText);
 
     // Now start VAD listening
     await startListening();
@@ -854,6 +866,13 @@ const BossChallenge = ({
               </div>
             </div>
           ))}
+          {localUserText && (status === "user-speaking" || status === "processing") && (
+            <div className="flex justify-end">
+              <div className="max-w-[82%] px-4 py-3 neo-border rounded-sm text-sm font-medium leading-relaxed bg-primary text-primary-foreground opacity-80 border-dashed">
+                {localUserText}
+              </div>
+            </div>
+          )}
           {status === "processing" && (
             <div className="flex justify-start">
               <div className="bg-muted neo-border rounded-sm px-4 py-3 flex items-center gap-2">
