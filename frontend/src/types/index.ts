@@ -203,6 +203,7 @@ export interface ManualPaymentOrder {
   expires_at: string;
   created_at: string;
   paid_at: string | null;
+  admin_note: string | null;
   qr_image_url: string | null;
   bank_name: string | null;
   account_number: string | null;

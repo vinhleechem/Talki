@@ -889,11 +889,14 @@ async def list_energy_logs(
 @router.post("/upload-signature")
 async def get_upload_signature(
     resource_type: str = "video",
+    folder: str = None,
     _: str = Depends(require_admin),
 ):
     """Trả về signed upload params để FE upload thẳng lên Cloudinary."""
     try:
-        return cloudinary_service.get_upload_signature(resource_type=resource_type)
+        return cloudinary_service.get_upload_signature(
+            resource_type=resource_type, folder=folder
+        )
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
 

@@ -11,4 +11,5 @@ pyjwt               # Xác thực JWT token từ Supabase
 # Voice features:
 google-cloud-speech       # STT tiếng Việt
 google-cloud-texttospeech # TTS – tổng hợp giọng Boss
-psycopg2-binary             # Driver giúp kết nối Postgres siêu nhanh (bất đồng bộ)
+psycopg2-binary             # Driver giúp kết nối Postgres siêu nhanh (bất đồng bộ)
+cloudinary                 # Media hosting (Cloudinary) - official SDK

@@ -37,6 +37,7 @@ class ManualPaymentOrderOut(BaseModel):
     expires_at: datetime
     created_at: datetime
     paid_at: datetime | None
+    admin_note: str | None = None
 
     # Inline instructions to simplify FE integration for now
     qr_image_url: str | None
@@ -116,6 +117,7 @@ async def create_manual_payment_order(
         expires_at=order.expires_at,
         created_at=order.created_at,
         paid_at=order.paid_at,
+        admin_note=order.admin_note,
         qr_image_url=config.qr_image_url,
         bank_name=config.bank_name,
         account_number=config.account_number,
@@ -151,6 +153,7 @@ async def confirm_manual_payment_order(
         expires_at=order.expires_at,
         created_at=order.created_at,
         paid_at=order.paid_at,
+        admin_note=order.admin_note,
         qr_image_url=config.qr_image_url,
         bank_name=config.bank_name,
         account_number=config.account_number,
@@ -176,6 +179,7 @@ async def list_my_orders(
             expires_at=order.expires_at,
             created_at=order.created_at,
             paid_at=order.paid_at,
+            admin_note=order.admin_note,
             qr_image_url=config.qr_image_url,
             bank_name=config.bank_name,
             account_number=config.account_number,

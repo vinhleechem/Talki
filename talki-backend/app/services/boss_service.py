@@ -66,29 +66,30 @@ def build_boss_system_prompt(
             "Cuộc trò chuyện sắp kết thúc. Hãy kết thúc tương tác một cách tự nhiên."
         )
 
-    return f"""HƯỚNG DẪN QUAN TRỌNG: Bạn là một NGƯỜI THẬT trong cuộc sống hàng ngày, KHÔNG phải:
-- Sợ lý ảo hay trợ thủ AI
-- Giáo viên hoặc hướng dẫn viên
-- Người đang kiểm tra hay đánh giá ai
+    return f"""HƯỚNG DẪN QUAN TRỌNG: Bạn là NHÂN VẬT ĐỐI DIỆN (NPC/Boss) trong kịch bản.
+Người đang nói chuyện với bạn là NGƯỜI DÙNG (học viên).
 
-Bạn là một người bình thường đang trò chuyện với một người khác.
+LƯU Ý VỀ ĐẠI TỪ: Định dạng tình huống thường viết từ góc nhìn của NGƯỜI DÙNG (ví dụ: "Bạn gặp một hàng xóm..."). Trong trường hợp đó, đại từ "Bạn" là chỉ NGƯỜI DÙNG, còn BẠN (AI) phải nhập vai vào người còn lại (người hàng xóm, tài xế, chủ nhà...).
+Tuyệt đối không nhầm lẫn vai trò! Bạn là người gây áp lực hoặc tương tác với người dùng.
 
-TÌNH HUỐNG THỰC TẾ:
+TÌNH HUỐNG NGƯỜI DÙNG ĐANG GẶP PHẢI:
 {scenario_context}
 
-TÊN/TÍNH CÁCH CÓ THỂ CÓ (để tham khảo):
+VAI DIỄN VÀ TÍNH CÁCH CỦA BẠN (AI):
 {personality}
 
 GIAI ĐOẠN HIỆN TẠI (lượt {turn_count + 1}/{max_turns}):
 {phase_hint}
 
 NGUYÊN TẮC BẮT BUỘC:
+- BẠN PHẢI CHỦ ĐỘNG DẪN DẮT CÂU CHUYỆN: Đừng chỉ trả lời thụ động hay chào hỏi qua lại. Hãy liên tục đặt câu hỏi, nêu vấn đề, đòi hỏi hoặc tạo sức ép phù hợp với TÌNH HUỐNG và TÍNH CÁCH của bạn.
+- BÁM SÁT MỤC TIÊU: Nhớ kỹ lý do bạn bắt chuyện ban đầu. Nếu người dùng lảng tránh, ngây ngô hoặc hỏi ngược lại "có chuyện gì", hãy nhắc thẳng vào vấn đề một cách dứt khoát.
 - Luôn ở trong vai, coi mình là người trong cuộc và hành động như thật.
 - Chỉ trả lời bằng tiếng Việt, tự nhiên và thoải mái.
-- Câu trả lời NGẮN (1-3 câu). Không bao giờ nhắc tới "tình huống", "luyện tập", hay "kiểm tra".
-- Phản ứng chân thực theo tính cách và bối cảnh của bạn.
-- Nếu người dùng nói không rõ, hãy hỏi lại bình thường ("Sao vậy?", "Cái gì?").
-- Không bao giờ ra vẻ giáo viên hay nhận xét lỗi ngữ pháp. Chỉ nói chuyện tự nhiên.
+- Câu trả lời NGẮN (1-3 câu). Tuyệt đối không giải thích ngữ cảnh, không nhắc tới chữ "tình huống", "luyện tập", hay "kiểm tra".
+- Phản ứng chân thực theo tính cách: nếu đang cáu gắt thì phải khó chịu, nếu lươn lẹo thì phải ngọt nhạt.
+- Nếu người dùng nói không liên quan, hãy kéo họ về chủ đề chính.
+- Không bao giờ ra vẻ giáo viên hay nhận xét lỗi ngữ pháp. Chỉ nói chuyện đời thường.
 
 JSON OUTPUT:
 Bạn PHẢI trả về kết quả theo định dạng JSON sau (chỉ JSON, không kèm giải thích):
@@ -96,7 +97,7 @@ Bạn PHẢI trả về kết quả theo định dạng JSON sau (chỉ JSON, kh
   "reply": "<câu trả lời tự nhiên của bạn>",
   "filler_count": <số lần người dùng dùng từ đệm như ừm, à, ờ, thì, là>,
   "fluency_score": <điểm 0-100 đánh giá sự mạch lạc của người dùng trong lượt này>,
-  "content_score": <điểm 0-100 đánh giá nội dung phù hợp với tình huống>
+  "content_score": <điểm 0-100 đánh giá MỨC ĐỘ THUYẾT PHỤC và THÁI ĐỘ. Trả lời cộc lốc/chửi bậy/bỏ cuộc -> cho điểm rất thấp 0-30>
 }}"""
 
 
@@ -246,12 +247,13 @@ async def create_session(
     greeting_opener = str(selected_scenario.get("greeting_opener", "Chào bạn!")).strip()
     personality_display = str(selected_personality.get("vi_display", "Trung lập")).strip()
 
+    greeting = greeting_opener or "Chào bạn!"
     session = BossSession(
         user_id=user_id,
         boss_config_id=config.id if config else None,
         scenario=scenario_context,
         personality=personality_display,
-        conversation_history=[],
+        conversation_history=[{"role": "assistant", "content": greeting}],
         turn_count=0,
         max_turns=max_turns,
         user_hp=100,
@@ -262,8 +264,6 @@ async def create_session(
     await db.commit()
     await db.refresh(session)
 
-    # Use scenario's greeting_opener as the boss's first greeting
-    greeting = greeting_opener or "Chào bạn!"
     return session, greeting
 
 
@@ -314,7 +314,10 @@ async def process_audio_turn(
 
     # 3. Calculate damage/HP (max 30 damage per turn)
     damage_to_boss = min(30, max(5, int((fluency_score + content_score) / 8)))
-    damage_to_user = filler_count * 5  # each filler costs 5 HP
+    
+    # User takes damage if they speak poorly, hesitate, or use filler words
+    damage_from_errors = max(0, 20 - int((fluency_score + content_score) / 10))
+    damage_to_user = min(40, damage_from_errors + (filler_count * 5))
 
     new_boss_hp = max(0, session.boss_hp - damage_to_boss)
     new_user_hp = max(0, session.user_hp - damage_to_user)

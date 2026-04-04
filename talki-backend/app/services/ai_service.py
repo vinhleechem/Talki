@@ -301,7 +301,9 @@ async def boss_chat_turn(
         "1. Chuyển ngữ chính xác những gì người dùng đã nói (transcript).\n"
         "2. Phản hồi lại bằng vai diễn của bạn (reply).\n"
         "3. Đếm số lần 'ừm', 'à', 'ờ', hoặc lặp từ do ngập ngừng (filler_count).\n"
-        "4. Đánh giá độ lưu loát (fluency_score) và nội dung (content_score) từ 0-100.\n\n"
+        "4. Đánh giá độ lưu loát (fluency_score) và nội dung (content_score) từ 0-100.\n"
+        "   Lưu ý về content_score: Chấm điểm dựa trên THÁI ĐỘ và KHẢ NĂNG GIẢI QUYẾT VẤN ĐỀ. "
+        "   Nếu trả lời thô lỗ, cộc lốc, vô học, lảng tránh, hoặc bỏ cuộc (ví dụ 'đi chỗ khác', 'tôi không biết'), content_score PHẢI RẤT THẤP (0-30).\n\n"
         "BẮT BUỘC TRẢ VỀ JSON:\n"
         "{\n"
         '  "transcript": "...",\n'
