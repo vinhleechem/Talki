@@ -4393,6 +4393,50 @@ function PaymentsPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
 
+  const [uploadState, setUploadState] = useState<"idle" | "uploading" | "done" | "error">("idle");
+  const [uploadProgress, setUploadProgress] = useState(0);
+
+  async function uploadQRToCloudinary(file: File) {
+    setUploadState("uploading");
+    setUploadProgress(0);
+    try {
+      const sig = await adminApi.getUploadSignature("image");
+      const form = new FormData();
+      form.append("file", file);
+      form.append("api_key", sig.api_key);
+      form.append("timestamp", String(sig.timestamp));
+      form.append("signature", sig.signature);
+      form.append("folder", sig.folder);
+
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", sig.upload_url);
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable)
+            setUploadProgress(Math.round((e.loaded / e.total) * 100));
+        };
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            const res = JSON.parse(xhr.responseText);
+            setConfigForm((prev) => ({
+              ...prev,
+              qr_image_url: res.secure_url,
+            }));
+            setUploadState("done");
+            resolve();
+          } else {
+            reject(new Error(`Upload thất bại: ${xhr.status}`));
+          }
+        };
+        xhr.onerror = () => reject(new Error("Network error khi upload"));
+        xhr.send(form);
+      });
+    } catch (err: unknown) {
+      console.error(err);
+      setUploadState("error");
+    }
+  }
+
   const loadData = async () => {
     try {
       const [paymentList, config] = await Promise.all([
@@ -4500,101 +4544,149 @@ function PaymentsPage() {
           Cấu hình nhận chuyển khoản
         </h3>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <input
-            className="px-3 py-2 text-sm font-bold focus:outline-none"
-            style={{ border: "2px solid black" }}
-            placeholder="URL ảnh QR"
-            value={configForm.qr_image_url}
-            onChange={(e) =>
-              setConfigForm((prev) => ({
-                ...prev,
-                qr_image_url: e.target.value,
-              }))
-            }
-          />
-          <input
-            className="px-3 py-2 text-sm font-bold focus:outline-none"
-            style={{ border: "2px solid black" }}
-            placeholder="Ngân hàng"
-            value={configForm.bank_name}
-            onChange={(e) =>
-              setConfigForm((prev) => ({ ...prev, bank_name: e.target.value }))
-            }
-          />
-          <input
-            className="px-3 py-2 text-sm font-bold focus:outline-none"
-            style={{ border: "2px solid black" }}
-            placeholder="Số tài khoản"
-            value={configForm.account_number}
-            onChange={(e) =>
-              setConfigForm((prev) => ({
-                ...prev,
-                account_number: e.target.value,
-              }))
-            }
-          />
-          <input
-            className="px-3 py-2 text-sm font-bold focus:outline-none"
-            style={{ border: "2px solid black" }}
-            placeholder="Tên tài khoản"
-            value={configForm.account_name}
-            onChange={(e) =>
-              setConfigForm((prev) => ({
-                ...prev,
-                account_name: e.target.value,
-              }))
-            }
-          />
-          <input
-            className="px-3 py-2 text-sm font-bold focus:outline-none"
-            style={{ border: "2px solid black" }}
-            placeholder="Tiền tố nội dung chuyển khoản"
-            value={configForm.transfer_prefix}
-            onChange={(e) =>
-              setConfigForm((prev) => ({
-                ...prev,
-                transfer_prefix: e.target.value.toUpperCase(),
-              }))
-            }
-          />
-          <input
-            className="px-3 py-2 text-sm font-bold focus:outline-none"
-            style={{ border: "2px solid black" }}
-            placeholder="Hướng dẫn thanh toán"
-            value={configForm.instructions}
-            onChange={(e) =>
-              setConfigForm((prev) => ({
-                ...prev,
-                instructions: e.target.value,
-              }))
-            }
-          />
-          <input
-            type="number"
-            className="px-3 py-2 text-sm font-bold focus:outline-none"
-            style={{ border: "2px solid black" }}
-            placeholder="Giá gói Tháng (VNĐ)"
-            value={configForm.monthly_price}
-            onChange={(e) =>
-              setConfigForm((prev) => ({
-                ...prev,
-                monthly_price: parseInt(e.target.value) || 0,
-              }))
-            }
-          />
-          <input
-            type="number"
-            className="px-3 py-2 text-sm font-bold focus:outline-none"
-            style={{ border: "2px solid black" }}
-            placeholder="Giá gói Năm (VNĐ)"
-            value={configForm.yearly_price}
-            onChange={(e) =>
-              setConfigForm((prev) => ({
-                ...prev,
-                yearly_price: parseInt(e.target.value) || 0,
-              }))
-            }
-          />
+          <div className="flex flex-col gap-2">
+            <div
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 cursor-pointer hover:bg-orange-50 transition-colors"
+              style={{ border: "2px dashed black" }}
+              onClick={() => document.getElementById("qrFileInput")?.click()}
+            >
+              <input
+                id="qrFileInput"
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) uploadQRToCloudinary(file);
+                }}
+              />
+              {uploadState === "idle" && (
+                <span className="text-xs font-black text-muted-foreground uppercase tracking-widest text-center">
+                  ☁️ Nhấn để tải ảnh mã QR
+                </span>
+              )}
+              {uploadState === "uploading" && (
+                <div className="w-full">
+                  <div className="flex justify-between mb-1">
+                    <span className="text-xs font-black uppercase">Đang tải lên...</span>
+                    <span className="text-xs font-black">{uploadProgress}%</span>
+                  </div>
+                  <div className="w-full h-1 bg-gray-200">
+                    <div className="h-full bg-orange-400" style={{ width: `${uploadProgress}%` }} />
+                  </div>
+                </div>
+              )}
+              {uploadState === "done" && (
+                <span className="text-xs font-black text-green-600 uppercase tracking-widest text-center">
+                  ✓ Upload thành công!
+                </span>
+              )}
+              {uploadState === "error" && (
+                <span className="text-xs font-black text-red-500 uppercase tracking-widest text-center">
+                  ✗ Upload thất bại
+                </span>
+              )}
+            </div>
+            
+            <input
+              className="px-3 py-2 text-sm font-bold focus:outline-none"
+              style={{ border: "2px solid black" }}
+              placeholder="Hoặc dán URL ảnh QR..."
+              value={configForm.qr_image_url}
+              onChange={(e) =>
+                setConfigForm((prev) => ({
+                  ...prev,
+                  qr_image_url: e.target.value,
+                }))
+              }
+            />
+          </div>
+          
+          <div className="flex flex-col gap-3">
+            <input
+              className="px-3 py-2 text-sm font-bold focus:outline-none"
+              style={{ border: "2px solid black" }}
+              placeholder="Ngân hàng"
+              value={configForm.bank_name}
+              onChange={(e) =>
+                setConfigForm((prev) => ({ ...prev, bank_name: e.target.value }))
+              }
+            />
+            <input
+              className="px-3 py-2 text-sm font-bold focus:outline-none"
+              style={{ border: "2px solid black" }}
+              placeholder="Số tài khoản"
+              value={configForm.account_number}
+              onChange={(e) =>
+                setConfigForm((prev) => ({
+                  ...prev,
+                  account_number: e.target.value,
+                }))
+              }
+            />
+            <input
+              className="px-3 py-2 text-sm font-bold focus:outline-none"
+              style={{ border: "2px solid black" }}
+              placeholder="Tên tài khoản"
+              value={configForm.account_name}
+              onChange={(e) =>
+                setConfigForm((prev) => ({
+                  ...prev,
+                  account_name: e.target.value,
+                }))
+              }
+            />
+            <input
+              className="px-3 py-2 text-sm font-bold focus:outline-none"
+              style={{ border: "2px solid black" }}
+              placeholder="Tiền tố nội dung chuyển khoản"
+              value={configForm.transfer_prefix}
+              onChange={(e) =>
+                setConfigForm((prev) => ({
+                  ...prev,
+                  transfer_prefix: e.target.value.toUpperCase(),
+                }))
+              }
+            />
+            <input
+              className="px-3 py-2 text-sm font-bold focus:outline-none"
+              style={{ border: "2px solid black" }}
+              placeholder="Hướng dẫn thanh toán"
+              value={configForm.instructions}
+              onChange={(e) =>
+                setConfigForm((prev) => ({
+                  ...prev,
+                  instructions: e.target.value,
+                }))
+              }
+            />
+            <input
+              type="number"
+              className="px-3 py-2 text-sm font-bold focus:outline-none"
+              style={{ border: "2px solid black" }}
+              placeholder="Giá gói Tháng (VNĐ)"
+              value={configForm.monthly_price}
+              onChange={(e) =>
+                setConfigForm((prev) => ({
+                  ...prev,
+                  monthly_price: parseInt(e.target.value) || 0,
+                }))
+              }
+            />
+            <input
+              type="number"
+              className="px-3 py-2 text-sm font-bold focus:outline-none"
+              style={{ border: "2px solid black" }}
+              placeholder="Giá gói Năm (VNĐ)"
+              value={configForm.yearly_price}
+              onChange={(e) =>
+                setConfigForm((prev) => ({
+                  ...prev,
+                  yearly_price: parseInt(e.target.value) || 0,
+                }))
+              }
+            />
+          </div>
         </div>
         <div className="mt-3 flex items-center justify-between gap-3">
           <p className="text-xs font-bold text-slate-500">
