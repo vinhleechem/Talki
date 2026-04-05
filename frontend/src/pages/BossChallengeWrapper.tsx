@@ -4,7 +4,9 @@ import { Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import BossChallenge from "@/components/BossChallenge";
 import { bossApi } from "@/services/bossApi";
+import { paymentApi } from "@/services/paymentService";
 import type { BossSessionResponse } from "@/services/bossApi";
+import type { ManualPaymentConfig } from "@/types";
 
 // ─── Boss avatar config ───────────────────────────────────────────────────────
 
@@ -47,6 +49,8 @@ const BossChallengeWrapper = () => {
   );
   const [errorMsg, setErrorMsg] = useState("");
   const [session, setSession] = useState<BossSessionResponse | null>(null);
+  const [paymentConfig, setPaymentConfig] =
+    useState<ManualPaymentConfig | null>(null);
 
   useEffect(() => {
     if (!state) return;
@@ -54,7 +58,20 @@ const BossChallengeWrapper = () => {
     async function boot() {
       try {
         // Production matching rule: lesson -> stage -> default
-        const configs = await bossApi.listConfigs();
+        const [configsResult, configResult] = await Promise.allSettled([
+          bossApi.listConfigs(),
+          paymentApi.getConfig(),
+        ]);
+
+        if (configResult.status === "fulfilled") {
+          setPaymentConfig(configResult.value);
+        }
+
+        if (configsResult.status !== "fulfilled") {
+          throw configsResult.reason;
+        }
+
+        const configs = configsResult.value;
         const normalize = (v?: string) => (v || "").trim().toLowerCase();
 
         const lessonTitle = state!.lessonTitle?.trim();
@@ -146,6 +163,7 @@ const BossChallengeWrapper = () => {
       personalityName={bossVisual.name}
       maxTurns={session.max_turns}
       passScore={session.pass_score}
+      bossFightCost={paymentConfig?.boss_fight_cost ?? 3}
       greetingText={session.greeting_text}
       greetingAudioB64={session.greeting_audio_b64}
     />

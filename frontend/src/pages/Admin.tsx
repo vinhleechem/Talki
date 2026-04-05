@@ -630,7 +630,6 @@ function UsersPage() {
   const planColor: Record<string, string> = {
     free: "#64748b",
     monthly: "#0284c7",
-    yearly: "#7c3aed",
   };
   const filteredUsers = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
@@ -729,7 +728,6 @@ function UsersPage() {
             <option value="all">Tất cả gói</option>
             <option value="free">Free</option>
             <option value="monthly">Monthly</option>
-            <option value="yearly">Yearly</option>
           </select>
         </div>
 
@@ -1003,7 +1001,6 @@ function UsersPage() {
                   >
                     <option value="free">Free</option>
                     <option value="monthly">Monthly</option>
-                    <option value="yearly">Yearly</option>
                   </select>
                 </div>
               </div>
@@ -4381,7 +4378,12 @@ function PaymentsPage() {
     transfer_prefix: "TALKI",
     instructions: "",
     monthly_price: 99000,
-    yearly_price: 999000,
+    rescue_price: 19000,
+    free_max_energy: 3,
+    monthly_max_energy: 7,
+    rescue_energy_amount: 9,
+    boss_fight_cost: 3,
+    lesson_practice_cost: 1,
   });
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
   const [savingConfig, setSavingConfig] = useState(false);
@@ -4395,14 +4397,19 @@ function PaymentsPage() {
   const [pageSize, setPageSize] = useState(20);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const [uploadState, setUploadState] = useState<"idle" | "uploading" | "done" | "error">("idle");
+  const [uploadState, setUploadState] = useState<
+    "idle" | "uploading" | "done" | "error"
+  >("idle");
   const [uploadProgress, setUploadProgress] = useState(0);
 
   async function uploadQRToCloudinary(file: File) {
     setUploadState("uploading");
     setUploadProgress(0);
     try {
-      const sig = await adminApi.getUploadSignature("image", "talki/payments/qr");
+      const sig = await adminApi.getUploadSignature(
+        "image",
+        "talki/payments/qr",
+      );
       const form = new FormData();
       form.append("file", file);
       form.append("api_key", sig.api_key);
@@ -4455,7 +4462,12 @@ function PaymentsPage() {
         transfer_prefix: config.transfer_prefix || "TALKI",
         instructions: config.instructions ?? "",
         monthly_price: config.monthly_price ?? 99000,
-        yearly_price: config.yearly_price ?? 999000,
+        rescue_price: config.rescue_price ?? 19000,
+        free_max_energy: config.free_max_energy ?? 3,
+        monthly_max_energy: config.monthly_max_energy ?? 7,
+        rescue_energy_amount: config.rescue_energy_amount ?? 9,
+        boss_fight_cost: config.boss_fight_cost ?? 3,
+        lesson_practice_cost: config.lesson_practice_cost ?? 1,
       });
     } catch (err) {
       handleError(err);
@@ -4477,7 +4489,12 @@ function PaymentsPage() {
         transfer_prefix: configForm.transfer_prefix,
         instructions: configForm.instructions || null,
         monthly_price: configForm.monthly_price,
-        yearly_price: configForm.yearly_price,
+        rescue_price: configForm.rescue_price,
+        free_max_energy: configForm.free_max_energy,
+        monthly_max_energy: configForm.monthly_max_energy,
+        rescue_energy_amount: configForm.rescue_energy_amount,
+        boss_fight_cost: configForm.boss_fight_cost,
+        lesson_practice_cost: configForm.lesson_practice_cost,
       });
       setPaymentConfig(updated);
       toast({ title: "Đã lưu cấu hình thanh toán" });
@@ -4570,11 +4587,18 @@ function PaymentsPage() {
               {uploadState === "uploading" && (
                 <div className="w-full">
                   <div className="flex justify-between mb-1">
-                    <span className="text-xs font-black uppercase">Đang tải lên...</span>
-                    <span className="text-xs font-black">{uploadProgress}%</span>
+                    <span className="text-xs font-black uppercase">
+                      Đang tải lên...
+                    </span>
+                    <span className="text-xs font-black">
+                      {uploadProgress}%
+                    </span>
                   </div>
                   <div className="w-full h-1 bg-gray-200">
-                    <div className="h-full bg-orange-400" style={{ width: `${uploadProgress}%` }} />
+                    <div
+                      className="h-full bg-orange-400"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
                   </div>
                 </div>
               )}
@@ -4589,7 +4613,7 @@ function PaymentsPage() {
                 </span>
               )}
             </div>
-            
+
             <input
               className="px-3 py-2 text-sm font-bold focus:outline-none"
               style={{ border: "2px solid black" }}
@@ -4603,7 +4627,7 @@ function PaymentsPage() {
               }
             />
           </div>
-          
+
           <div className="flex flex-col gap-3">
             <input
               className="px-3 py-2 text-sm font-bold focus:outline-none"
@@ -4611,7 +4635,10 @@ function PaymentsPage() {
               placeholder="Ngân hàng"
               value={configForm.bank_name}
               onChange={(e) =>
-                setConfigForm((prev) => ({ ...prev, bank_name: e.target.value }))
+                setConfigForm((prev) => ({
+                  ...prev,
+                  bank_name: e.target.value,
+                }))
               }
             />
             <input
@@ -4662,32 +4689,127 @@ function PaymentsPage() {
                 }))
               }
             />
-            <input
-              type="number"
-              className="px-3 py-2 text-sm font-bold focus:outline-none"
-              style={{ border: "2px solid black" }}
-              placeholder="Giá gói Tháng (VNĐ)"
-              value={configForm.monthly_price}
-              onChange={(e) =>
-                setConfigForm((prev) => ({
-                  ...prev,
-                  monthly_price: parseInt(e.target.value) || 0,
-                }))
-              }
-            />
-            <input
-              type="number"
-              className="px-3 py-2 text-sm font-bold focus:outline-none"
-              style={{ border: "2px solid black" }}
-              placeholder="Giá gói Năm (VNĐ)"
-              value={configForm.yearly_price}
-              onChange={(e) =>
-                setConfigForm((prev) => ({
-                  ...prev,
-                  yearly_price: parseInt(e.target.value) || 0,
-                }))
-              }
-            />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-black uppercase text-slate-500 mb-1 block">
+                  Giá Monthly (VNĐ)
+                </label>
+                <input
+                  type="number"
+                  className="w-full px-3 py-2 text-sm font-bold focus:outline-none"
+                  style={{ border: "2px solid black" }}
+                  value={configForm.monthly_price}
+                  onChange={(e) =>
+                    setConfigForm((prev) => ({
+                      ...prev,
+                      monthly_price: parseInt(e.target.value) || 0,
+                    }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="text-xs font-black uppercase text-slate-500 mb-1 block">
+                  Giá Rescue (VNĐ)
+                </label>
+                <input
+                  type="number"
+                  className="w-full px-3 py-2 text-sm font-bold focus:outline-none"
+                  style={{ border: "2px solid black" }}
+                  value={configForm.rescue_price}
+                  onChange={(e) =>
+                    setConfigForm((prev) => ({
+                      ...prev,
+                      rescue_price: parseInt(e.target.value) || 0,
+                    }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="text-xs font-black uppercase text-slate-500 mb-1 block">
+                  Max NL Gói Free
+                </label>
+                <input
+                  type="number"
+                  className="w-full px-3 py-2 text-sm font-bold focus:outline-none"
+                  style={{ border: "2px solid black" }}
+                  value={configForm.free_max_energy}
+                  onChange={(e) =>
+                    setConfigForm((prev) => ({
+                      ...prev,
+                      free_max_energy: parseInt(e.target.value) || 0,
+                    }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="text-xs font-black uppercase text-slate-500 mb-1 block">
+                  Max NL Gói Month
+                </label>
+                <input
+                  type="number"
+                  className="w-full px-3 py-2 text-sm font-bold focus:outline-none"
+                  style={{ border: "2px solid black" }}
+                  value={configForm.monthly_max_energy}
+                  onChange={(e) =>
+                    setConfigForm((prev) => ({
+                      ...prev,
+                      monthly_max_energy: parseInt(e.target.value) || 0,
+                    }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="text-xs font-black uppercase text-slate-500 mb-1 block">
+                  Tặng NL Gói Rescue
+                </label>
+                <input
+                  type="number"
+                  className="w-full px-3 py-2 text-sm font-bold focus:outline-none"
+                  style={{ border: "2px solid black" }}
+                  value={configForm.rescue_energy_amount}
+                  onChange={(e) =>
+                    setConfigForm((prev) => ({
+                      ...prev,
+                      rescue_energy_amount: parseInt(e.target.value) || 0,
+                    }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="text-xs font-black uppercase text-slate-500 mb-1 block">
+                  Phí Đánh Boss
+                </label>
+                <input
+                  type="number"
+                  className="w-full px-3 py-2 text-sm font-bold focus:outline-none"
+                  style={{ border: "2px solid black" }}
+                  value={configForm.boss_fight_cost}
+                  onChange={(e) =>
+                    setConfigForm((prev) => ({
+                      ...prev,
+                      boss_fight_cost: parseInt(e.target.value) || 0,
+                    }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="text-xs font-black uppercase text-slate-500 mb-1 block">
+                  Phí Làm Bài
+                </label>
+                <input
+                  type="number"
+                  className="w-full px-3 py-2 text-sm font-bold focus:outline-none"
+                  style={{ border: "2px solid black" }}
+                  value={configForm.lesson_practice_cost}
+                  onChange={(e) =>
+                    setConfigForm((prev) => ({
+                      ...prev,
+                      lesson_practice_cost: parseInt(e.target.value) || 0,
+                    }))
+                  }
+                />
+              </div>
+            </div>
           </div>
         </div>
         <div className="mt-3 flex items-center justify-between gap-3">
@@ -4760,7 +4882,9 @@ function PaymentsPage() {
             }}
             disabled={isRefreshing}
           >
-            <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
+            <RefreshCw
+              className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`}
+            />
             Làm mới
           </button>
         </div>

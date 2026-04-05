@@ -58,7 +58,7 @@ class AdminUserCreate(BaseModel):
 
 class AdminUserUpdate(BaseModel):
     role: Optional[str] = None   # 'user' | 'admin'
-    plan: Optional[str] = None   # 'free' | 'monthly' | 'yearly'
+    plan: Optional[str] = None   # 'free' | 'monthly'
     energy: Optional[int] = None
 
 
@@ -222,7 +222,12 @@ class AdminManualPaymentConfigOut(BaseModel):
     transfer_prefix: str
     instructions: Optional[str]
     monthly_price: int
-    yearly_price: int
+    rescue_price: int
+    free_max_energy: int
+    monthly_max_energy: int
+    rescue_energy_amount: int
+    boss_fight_cost: int
+    lesson_practice_cost: int
     updated_at: Optional[datetime]
 
 
@@ -234,7 +239,12 @@ class AdminManualPaymentConfigUpdate(BaseModel):
     transfer_prefix: Optional[str] = None
     instructions: Optional[str] = None
     monthly_price: Optional[int] = None
-    yearly_price: Optional[int] = None
+    rescue_price: Optional[int] = None
+    free_max_energy: Optional[int] = None
+    monthly_max_energy: Optional[int] = None
+    rescue_energy_amount: Optional[int] = None
+    boss_fight_cost: Optional[int] = None
+    lesson_practice_cost: Optional[int] = None
 
 
 class AdminPaymentReviewRequest(BaseModel):
@@ -391,7 +401,7 @@ async def update_user(
             raise HTTPException(status_code=400, detail="role must be 'user' or 'admin'")
         user.role = body.role
     if body.plan is not None:
-        if body.plan not in ("free", "monthly", "yearly"):
+        if body.plan not in ("free", "monthly"):
             raise HTTPException(status_code=400, detail="Invalid plan")
         user.plan = body.plan
     if body.energy is not None:
@@ -721,7 +731,12 @@ async def get_payment_config(
         transfer_prefix=config.transfer_prefix,
         instructions=config.instructions,
         monthly_price=config.monthly_price,
-        yearly_price=config.yearly_price,
+        rescue_price=config.rescue_price,
+        free_max_energy=config.free_max_energy,
+        monthly_max_energy=config.monthly_max_energy,
+        rescue_energy_amount=config.rescue_energy_amount,
+        boss_fight_cost=config.boss_fight_cost,
+        lesson_practice_cost=config.lesson_practice_cost,
         updated_at=config.updated_at,
     )
 
@@ -754,7 +769,12 @@ async def update_payment_config(
         transfer_prefix=config.transfer_prefix,
         instructions=config.instructions,
         monthly_price=config.monthly_price,
-        yearly_price=config.yearly_price,
+        rescue_price=config.rescue_price,
+        free_max_energy=config.free_max_energy,
+        monthly_max_energy=config.monthly_max_energy,
+        rescue_energy_amount=config.rescue_energy_amount,
+        boss_fight_cost=config.boss_fight_cost,
+        lesson_practice_cost=config.lesson_practice_cost,
         updated_at=config.updated_at,
     )
 

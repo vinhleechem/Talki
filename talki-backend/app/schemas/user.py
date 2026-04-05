@@ -10,6 +10,7 @@ class UserPublic(BaseModel):
     email: str
     avatar_url: str | None
     hearts: int
+    max_energy: int
     is_premium: bool
     plan: str
     plan_expires_at: datetime | None

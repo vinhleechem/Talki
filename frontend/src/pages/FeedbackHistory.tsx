@@ -1,6 +1,14 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Star, Zap, User, ChevronDown, ChevronUp, BookOpen, ArrowLeft } from "lucide-react";
+import {
+  Star,
+  Zap,
+  User,
+  ChevronDown,
+  ChevronUp,
+  BookOpen,
+  ArrowLeft,
+} from "lucide-react";
 import RichText from "@/components/RichText";
 import { lessonService } from "@/services/lessonService";
 import { useUser } from "@/contexts/UserContext";
@@ -10,16 +18,27 @@ import type { LessonAttemptHistoryItem } from "@/types";
 
 function formatDate(iso: string) {
   const d = new Date(iso);
-  return d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" }) +
-    " " + d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+  return (
+    d.toLocaleDateString("vi-VN", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    }) +
+    " " +
+    d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })
+  );
 }
 
 function ScoreBar({ score }: { score: number }) {
-  const color = score >= 80 ? "bg-green-500" : score >= 60 ? "bg-yellow-400" : "bg-red-400";
+  const color =
+    score >= 80 ? "bg-green-500" : score >= 60 ? "bg-yellow-400" : "bg-red-400";
   return (
     <div className="flex items-center gap-2 w-full">
       <div className="flex-1 h-2 bg-muted neo-border rounded-full overflow-hidden">
-        <div className={`h-full ${color} transition-all duration-700 rounded-full`} style={{ width: `${score}%` }} />
+        <div
+          className={`h-full ${color} transition-all duration-700 rounded-full`}
+          style={{ width: `${score}%` }}
+        />
       </div>
       <span className="text-sm font-black w-10 text-right">{score}</span>
     </div>
@@ -41,9 +60,19 @@ function StarRow({ stars }: { stars: number }) {
 
 /* ─── attempt card ─────────────────────────────────────────── */
 
-function AttemptCard({ item, displayNumber }: { item: LessonAttemptHistoryItem; displayNumber: number }) {
+function AttemptCard({
+  item,
+  displayNumber,
+}: {
+  item: LessonAttemptHistoryItem;
+  displayNumber: number;
+}) {
   const [open, setOpen] = useState(false);
-  const hasFeedback = item.content_feedback || item.speed_feedback || item.emotion_feedback || item.advice_text;
+  const hasFeedback =
+    item.content_feedback ||
+    item.speed_feedback ||
+    item.emotion_feedback ||
+    item.advice_text;
 
   const cs = Math.round((item.content_score ?? 0) * 10);
   const ss = Math.round((item.speed_score ?? 0) * 10);
@@ -62,17 +91,27 @@ function AttemptCard({ item, displayNumber }: { item: LessonAttemptHistoryItem; 
         </div>
 
         <div className="flex-1 min-w-0">
-          <p className="font-black text-sm text-foreground truncate">{item.lesson_title}</p>
-          <p className="text-xs text-muted-foreground truncate">{item.chapter_title}</p>
+          <p className="font-black text-sm text-foreground truncate">
+            {item.lesson_title}
+          </p>
+          <p className="text-xs text-muted-foreground truncate">
+            {item.chapter_title}
+          </p>
         </div>
 
         <div className="flex flex-col items-end gap-1 flex-shrink-0">
           <StarRow stars={item.stars} />
-          <span className="text-xs text-muted-foreground">{formatDate(item.created_at)}</span>
+          <span className="text-xs text-muted-foreground">
+            {formatDate(item.created_at)}
+          </span>
         </div>
 
         <div className="flex-shrink-0 ml-1">
-          {open ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+          {open ? (
+            <ChevronUp className="w-4 h-4 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-muted-foreground" />
+          )}
         </div>
       </button>
 
@@ -87,7 +126,9 @@ function AttemptCard({ item, displayNumber }: { item: LessonAttemptHistoryItem; 
               { label: "Cảm xúc", value: es },
             ].map(({ label, value }) => (
               <div key={label} className="text-center">
-                <p className="text-xs text-muted-foreground font-bold">{label}</p>
+                <p className="text-xs text-muted-foreground font-bold">
+                  {label}
+                </p>
                 <p className="font-black text-sm text-foreground">{value}</p>
               </div>
             ))}
@@ -110,7 +151,10 @@ function AttemptCard({ item, displayNumber }: { item: LessonAttemptHistoryItem; 
                   src={item.audio_url}
                   className="w-full h-10 rounded"
                   style={{ accentColor: "var(--primary)" }}
-                  onError={(e) => { (e.currentTarget as HTMLAudioElement).style.display = "none"; }}
+                  onError={(e) => {
+                    (e.currentTarget as HTMLAudioElement).style.display =
+                      "none";
+                  }}
                 />
               )}
               {item.transcript && (
@@ -132,14 +176,18 @@ function AttemptCard({ item, displayNumber }: { item: LessonAttemptHistoryItem; 
               .filter((f) => !!f.value)
               .map((f) => (
                 <div key={f.label}>
-                  <p className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-1">{f.label}</p>
+                  <p className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-1">
+                    {f.label}
+                  </p>
                   <p className="text-sm text-foreground leading-relaxed">
                     <RichText text={f.value!} />
                   </p>
                 </div>
               ))
           ) : (
-            <p className="text-sm text-muted-foreground italic">Chưa có nhận xét chi tiết cho lần luyện này.</p>
+            <p className="text-sm text-muted-foreground italic">
+              Chưa có nhận xét chi tiết cho lần luyện này.
+            </p>
           )}
         </div>
       )}
@@ -167,7 +215,9 @@ const FeedbackHistory = () => {
 
   /* group by lesson_id for stats */
   const lessonSet = new Set(items.map((i) => i.lesson_id));
-  const avgScore = items.length ? Math.round(items.reduce((s, i) => s + i.score, 0) / items.length) : 0;
+  const avgScore = items.length
+    ? Math.round(items.reduce((s, i) => s + i.score, 0) / items.length)
+    : 0;
   const bestStars = items.length ? Math.max(...items.map((i) => i.stars)) : 0;
 
   return (
@@ -179,22 +229,32 @@ const FeedbackHistory = () => {
           className="flex items-center gap-3 hover:opacity-80 transition-opacity"
         >
           <div className="bg-primary neo-border neo-shadow-sm w-10 h-10 flex items-center justify-center">
-            <span className="text-xl font-black text-primary-foreground">T</span>
+            <span className="text-xl font-black text-primary-foreground">
+              T
+            </span>
           </div>
-          <h1 className="text-xl font-black uppercase tracking-tighter">Talki Map</h1>
+          <h1 className="text-xl font-black uppercase tracking-tighter">
+            Talki Map
+          </h1>
         </button>
 
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 bg-yellow-400 neo-border neo-shadow-sm px-3 py-1">
             <Zap className="w-4 h-4 fill-black text-black" />
-            <span className="font-black text-sm text-black">{hearts}/20</span>
+            <span className="font-black text-sm text-black">
+              {hearts}/{profile?.max_energy ?? 20}
+            </span>
           </div>
           <button
             onClick={() => navigate("/profile")}
             className="w-10 h-10 neo-border neo-shadow-sm bg-muted flex items-center justify-center overflow-hidden hover:opacity-80 transition-opacity"
           >
             {profile?.avatar_url ? (
-              <img src={profile.avatar_url} alt="avatar" className="w-full h-full object-cover" />
+              <img
+                src={profile.avatar_url}
+                alt="avatar"
+                className="w-full h-full object-cover"
+              />
             ) : (
               <User className="w-5 h-5" />
             )}
@@ -212,8 +272,12 @@ const FeedbackHistory = () => {
             <ArrowLeft className="w-4 h-4" />
           </button>
           <div>
-            <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tighter">Lịch sử luyện tập</h1>
-            <p className="text-sm text-muted-foreground font-bold">Xem lại tất cả các lần bạn đã luyện tập</p>
+            <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tighter">
+              Lịch sử luyện tập
+            </h1>
+            <p className="text-sm text-muted-foreground font-bold">
+              Xem lại tất cả các lần bạn đã luyện tập
+            </p>
           </div>
         </div>
 
@@ -225,9 +289,14 @@ const FeedbackHistory = () => {
               { label: "Bài đã thử", value: lessonSet.size },
               { label: "Điểm TB", value: `${avgScore}/100` },
             ].map((s) => (
-              <div key={s.label} className="neo-border neo-shadow rounded-sm bg-card p-4 text-center">
+              <div
+                key={s.label}
+                className="neo-border neo-shadow rounded-sm bg-card p-4 text-center"
+              >
                 <p className="text-2xl font-black text-foreground">{s.value}</p>
-                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mt-1">{s.label}</p>
+                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mt-1">
+                  {s.label}
+                </p>
               </div>
             ))}
           </div>
@@ -238,7 +307,9 @@ const FeedbackHistory = () => {
           <div className="neo-border neo-shadow rounded-sm bg-primary/10 px-5 py-3 flex items-center gap-3 mb-6">
             <BookOpen className="w-5 h-5 text-primary flex-shrink-0" />
             <div>
-              <p className="font-black text-sm text-foreground">Kết quả tốt nhất</p>
+              <p className="font-black text-sm text-foreground">
+                Kết quả tốt nhất
+              </p>
               <StarRow stars={bestStars} />
             </div>
           </div>
@@ -248,7 +319,10 @@ const FeedbackHistory = () => {
         {loading && (
           <div className="space-y-3">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="neo-border rounded-sm bg-muted/30 animate-pulse h-20" />
+              <div
+                key={i}
+                className="neo-border rounded-sm bg-muted/30 animate-pulse h-20"
+              />
             ))}
           </div>
         )}
@@ -267,8 +341,12 @@ const FeedbackHistory = () => {
               <BookOpen className="w-8 h-8 text-muted-foreground" />
             </div>
             <div>
-              <p className="font-black text-lg text-foreground">Chưa có lần luyện nào</p>
-              <p className="text-sm text-muted-foreground mt-1">Hãy vào Bản đồ và bắt đầu luyện tập!</p>
+              <p className="font-black text-lg text-foreground">
+                Chưa có lần luyện nào
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Hãy vào Bản đồ và bắt đầu luyện tập!
+              </p>
             </div>
             <button
               onClick={() => navigate("/roadmap")}
@@ -283,7 +361,11 @@ const FeedbackHistory = () => {
         {!loading && !error && items.length > 0 && (
           <div className="space-y-3">
             {items.map((item, index) => (
-              <AttemptCard key={item.id} item={item} displayNumber={items.length - index} />
+              <AttemptCard
+                key={item.id}
+                item={item}
+                displayNumber={items.length - index}
+              />
             ))}
           </div>
         )}

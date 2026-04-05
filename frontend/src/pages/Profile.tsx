@@ -29,7 +29,8 @@ const Profile = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [userName, setUserName] = useState("");
   const [email, setEmail] = useState("");
-  const [paymentConfig, setPaymentConfig] = useState<ManualPaymentConfig | null>(null);
+  const [paymentConfig, setPaymentConfig] =
+    useState<ManualPaymentConfig | null>(null);
 
   useEffect(() => {
     paymentApi.getConfig().then(setPaymentConfig).catch(console.error);
@@ -91,18 +92,14 @@ const Profile = () => {
   const completedScenes = progress.filter((p) => p.completed).length;
   const currentPlan = profile?.plan ?? "free";
   const isMonthly = currentPlan === "monthly";
-  const isYearly = currentPlan === "yearly";
   const isFree = currentPlan === "free";
-  const currentPlanLabel = isMonthly
-    ? "Gói Tháng"
-    : isYearly
-      ? "Gói Năm"
-      : "Miễn Phí";
+  const currentPlanLabel = isMonthly ? "Gói Tháng" : "Miễn Phí";
 
   const monthlyPrice = paymentConfig?.monthly_price ?? 99000;
-  const yearlyPrice = paymentConfig?.yearly_price ?? 999000;
-  const savings = Math.max(0, monthlyPrice * 12 - yearlyPrice);
-  const savingsPercent = monthlyPrice > 0 ? Math.round((savings / (monthlyPrice * 12)) * 100) : 17;
+  const rescuePrice = paymentConfig?.rescue_price ?? 19000;
+  const currentEnergy = profile?.hearts ?? 0;
+  const maxEnergy =
+    profile?.max_energy ?? paymentConfig?.monthly_max_energy ?? 7;
 
   return (
     <div className="min-h-screen pb-20">
@@ -234,6 +231,9 @@ const Profile = () => {
             Gói hiện tại:{" "}
             <span className="text-primary">{currentPlanLabel}</span>
           </p>
+          <p className="text-sm text-muted-foreground mb-2">
+            Năng lượng hiện tại: {currentEnergy} / {maxEnergy}
+          </p>
           <p className="text-sm text-muted-foreground mb-6">
             Nâng cấp để mở khóa tất cả các giai đoạn và tính năng cao cấp
           </p>
@@ -324,57 +324,63 @@ const Profile = () => {
               </Button>
             </div>
 
-            {/* Annual Plan */}
+            {/* Rescue Plan */}
             <div className="bg-secondary/10 neo-border border-secondary rounded-sm p-6 relative">
               <div className="absolute top-2 right-2 bg-secondary text-secondary-foreground text-xs font-black px-3 py-1 rounded-sm">
-                TIẾT KIỆM {savingsPercent}%
+                +9 NL tức thì
               </div>
               <div className="flex items-start justify-between mb-4">
                 <div>
                   <h3 className="text-xl font-black text-foreground mb-1">
-                    Gói Năm
+                    Gói Cứu Trợ
                   </h3>
                   <p className="text-sm text-muted-foreground">
-                    Tiết kiệm nhất
+                    Mua lúc nào cũng được, cộng thẳng vào năng lượng hiện tại
                   </p>
                 </div>
                 <div>
                   <div className="text-2xl font-black text-foreground">
-                    {yearlyPrice.toLocaleString()}đ
+                    {rescuePrice.toLocaleString()}đ
                   </div>
                   <div className="text-xs text-muted-foreground text-right">
-                    /năm
+                    /lần
                   </div>
                 </div>
               </div>
               <ul className="space-y-2 mb-4">
                 <li className="flex items-center gap-2 text-sm">
                   <Zap className="w-4 h-4 text-secondary" />
-                  <span className="font-bold">Mọi tính năng gói Tháng</span>
+                  <span className="font-bold">
+                    +9 năng lượng ngay khi admin duyệt
+                  </span>
                 </li>
                 <li className="flex items-center gap-2 text-sm">
                   <Zap className="w-4 h-4 text-secondary" />
-                  <span className="font-bold">Tiết kiệm {savings.toLocaleString()}đ/năm</span>
+                  <span className="font-bold">Không đổi gói hiện tại</span>
                 </li>
                 <li className="flex items-center gap-2 text-sm">
                   <Zap className="w-4 h-4 text-secondary" />
-                  <span className="font-bold">Nội dung độc quyền</span>
+                  <span className="font-bold">
+                    Có thể cộng vượt mức tối đa gốc
+                  </span>
                 </li>
                 <li className="flex items-center gap-2 text-sm">
                   <Zap className="w-4 h-4 text-secondary" />
-                  <span className="font-bold">Cập nhật ưu tiên</span>
+                  <span className="font-bold">
+                    Dùng tiếp tới khi hết, ngày sau mới refill theo gói
+                  </span>
                 </li>
               </ul>
               <Button
                 variant="secondary"
                 className="w-full"
-                disabled={isYearly}
+                disabled={false}
                 onClick={() =>
-                  navigate("/payment", { state: { plan: "annual" } })
+                  navigate("/payment", { state: { plan: "rescue" } })
                 }
               >
                 <Crown className="w-4 h-4 mr-2" />
-                {isYearly ? "Gói hiện tại" : "Nâng cấp gói Năm"}
+                Mua gói cứu trợ
               </Button>
             </div>
           </div>

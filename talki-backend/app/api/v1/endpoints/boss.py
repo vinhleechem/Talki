@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.security import get_current_user_id
 from app.models.boss import BossConfig, BossSession
-from app.services import boss_service
+from app.services import boss_service, heart_service, payment_service
 
 router = APIRouter(prefix="/boss", tags=["boss"])
 
@@ -164,7 +164,19 @@ async def create_boss_session(
     current_user_id: uuid.UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
-    """Create a new boss fight session and return greeting + session ID."""
+    """Create a new boss fight session and deduct the configured energy cost."""
+    config = await payment_service.get_or_create_manual_config(db)
+    boss_cost = config.boss_fight_cost
+    try:
+        await heart_service.consume_energy(
+            db, current_user_id, amount=boss_cost, reason="boss_fight"
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail=str(e),
+        )
+
     session, greeting_text = await boss_service.create_session(
         db=db,
         user_id=current_user_id,
