@@ -7,3 +7,6 @@ Thumbs.db
 
 # Local environment overrides (do not commit machine-specific secrets/paths)
 .env
+.env.production
+.env.development
+secrets/

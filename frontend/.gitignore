@@ -14,6 +14,8 @@ dist-ssr
 
 # Environment variables
 .env
+.env.production
+.env.development
 
 # VS Code Local History extension
 .history/

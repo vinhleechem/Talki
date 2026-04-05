@@ -1,5 +1,6 @@
 fastapi             # Framework làm Backend (Nhanh, hiện đại)
 uvicorn             # Cái máy chủy để chạy code FastAPI
+gunicorn            # WSGI server cho production
 sqlalchemy[asyncio]   # Thư viện để code Python nói chuyện với Database
 asyncpg             # Driver giúp kết nối Postgres siêu nhanh (bất đồng bộ)
 httpx               # Async HTTP client – dùng để gọi Supabase Auth API
