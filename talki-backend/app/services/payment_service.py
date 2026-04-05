@@ -1,3 +1,4 @@
+"""Payment service — v2.1: plans are 'monthly' (subscription) and 'rescue' (one-time energy top-up)."""
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -5,17 +6,17 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.payment import ManualPaymentConfig, PaymentOrder, Subscription
-from app.models.user import User
+from app.models.user import EnergyLog, User
 
-PLAN_DURATIONS = {
-    "monthly": timedelta(days=30),
-    "yearly": timedelta(days=365)
-}
+SUBSCRIPTION_PLANS = {"monthly"}   # Plans that create a recurring subscription
+ONE_TIME_PLANS = {"rescue"}        # Plans that add energy immediately (no subscription)
+ALL_PLANS = SUBSCRIPTION_PLANS | ONE_TIME_PLANS
+
 
 def validate_plan(plan: str) -> str:
     """Validate subscription plan name used by payment flows."""
-    if plan not in ["monthly", "yearly"]:
-        raise ValueError(f"Invalid plan: {plan}")
+    if plan not in ALL_PLANS:
+        raise ValueError(f"Gói không hợp lệ: '{plan}'. Chấp nhận: {', '.join(sorted(ALL_PLANS))}")
     return plan
 
 
@@ -28,11 +29,9 @@ async def get_or_create_manual_config(db: AsyncSession) -> ManualPaymentConfig:
     config = await db.get(ManualPaymentConfig, 1)
     if config:
         return config
-
     config = ManualPaymentConfig(id=1, transfer_prefix="TALKI")
     db.add(config)
     await db.flush()
-    # Load server-side defaults (e.g., updated_at) in async context to avoid lazy-load later.
     await db.refresh(config)
     return config
 
@@ -46,38 +45,39 @@ async def create_manual_payment_order(
     config = await get_or_create_manual_config(db)
     now = datetime.now(timezone.utc)
 
-    existing_in_progress_result = await db.execute(
-        select(PaymentOrder)
-        .where(
-            PaymentOrder.user_id == user_id,
-            PaymentOrder.status.in_(["created", "pending"]),
-            PaymentOrder.expires_at > now,
+    # For subscription plans, only allow one pending order at a time
+    if plan in SUBSCRIPTION_PLANS:
+        existing_result = await db.execute(
+            select(PaymentOrder)
+            .where(
+                PaymentOrder.user_id == user_id,
+                PaymentOrder.status.in_(["created", "pending"]),
+                PaymentOrder.expires_at > now,
+            )
+            .order_by(PaymentOrder.created_at.desc())
+            .limit(1)
         )
-        .order_by(PaymentOrder.created_at.desc())
-        .limit(1)
-    )
-    existing_in_progress = existing_in_progress_result.scalar_one_or_none()
+        existing = existing_result.scalar_one_or_none()
+        if existing is not None:
+            existing.plan = plan
+            existing.amount_vnd = config.monthly_price
+            existing.expires_at = now + timedelta(days=2)
+            if not existing.transfer_note:
+                existing.transfer_note = build_transfer_note(config.transfer_prefix, existing.id)
+            await db.flush()
+            return existing, config
 
-    # Idempotent behavior: only one active in-progress order per user at a time.
-    if existing_in_progress is not None:
-        existing_in_progress.plan = plan
-        existing_in_progress.amount_vnd = config.yearly_price if plan == "yearly" else config.monthly_price
-        existing_in_progress.expires_at = now + timedelta(days=2)
-        if not existing_in_progress.transfer_note:
-            existing_in_progress.transfer_note = build_transfer_note(config.transfer_prefix, existing_in_progress.id)
-        await db.flush()
-        return existing_in_progress, config
+    amount = config.rescue_price if plan == "rescue" else config.monthly_price
 
     order = PaymentOrder(
         user_id=user_id,
         plan=plan,
-        amount_vnd=config.yearly_price if plan == "yearly" else config.monthly_price,
+        amount_vnd=amount,
         status="created",
         expires_at=now + timedelta(days=2),
     )
     db.add(order)
     await db.flush()
-
     order.transfer_note = build_transfer_note(config.transfer_prefix, order.id)
     await db.flush()
     return order, config
@@ -120,11 +120,13 @@ async def list_user_payment_orders(db: AsyncSession, user_id: uuid.UUID) -> list
 
 
 async def sync_user_plan_state(db: AsyncSession, user_id: uuid.UUID) -> None:
-    """Recompute user plan from active subscriptions, including expiry fallback to free."""
+    """Recompute user plan from active subscriptions. Uses config for max_energy values."""
     now = datetime.now(timezone.utc)
     user = await db.get(User, user_id)
     if not user:
         return
+
+    config = await get_or_create_manual_config(db)
 
     active_subs_result = await db.execute(
         select(Subscription)
@@ -139,27 +141,79 @@ async def sync_user_plan_state(db: AsyncSession, user_id: uuid.UUID) -> None:
     if not active_subs:
         user.plan = "free"
         user.plan_expires_at = None
-        user.max_energy = 3
-        if user.energy > 3:
-            user.energy = 3
+        user.max_energy = config.free_max_energy
+        # Don't clamp energy — let daily reset handle it naturally (next day reset to free max)
         return
 
     latest = active_subs[0]
     user.plan = latest.plan
     user.plan_expires_at = latest.expires_at
-    user.max_energy = 20
-    if user.energy > 20:
-        user.energy = 20
+    user.max_energy = config.monthly_max_energy
 
 
 async def _apply_paid_order(db: AsyncSession, order: PaymentOrder) -> None:
-    duration = PLAN_DURATIONS[order.plan]
+    """Apply effects when admin marks an order as 'paid'."""
+    config = await get_or_create_manual_config(db)
     now = datetime.now(timezone.utc)
+    user = await db.get(User, order.user_id)
 
-    existing_sub = await db.execute(
+    if order.plan == "rescue":
+        # One-time energy top-up — add immediately, can exceed max
+        if user:
+            energy_added = config.rescue_energy_amount
+            user.energy += energy_added
+            db.add(
+                EnergyLog(
+                    user_id=user.id,
+                    delta=energy_added,
+                    reason="rescue_topup",
+                    reference_id=order.id,
+                    energy_after=user.energy,
+                )
+            )
+        return  # No subscription created for rescue
+
+
+async def _revert_paid_order(db: AsyncSession, order: PaymentOrder) -> None:
+    """Undo effects of a previously paid order if admin revokes it."""
+    config = await get_or_create_manual_config(db)
+    user = await db.get(User, order.user_id)
+
+    if order.plan == "rescue" and user:
+        existing_result = await db.execute(
+            select(EnergyLog)
+            .where(
+                EnergyLog.user_id == user.id,
+                EnergyLog.reference_id == order.id,
+                EnergyLog.reason == "rescue_topup",
+            )
+            .order_by(EnergyLog.created_at.desc())
+            .limit(1)
+        )
+        existing_log = existing_result.scalar_one_or_none()
+        revert_amount = int(existing_log.delta) if existing_log else config.rescue_energy_amount
+        user.energy = max(0, user.energy - revert_amount)
+        db.add(
+            EnergyLog(
+                user_id=user.id,
+                delta=-revert_amount,
+                reason="rescue_revert",
+                reference_id=order.id,
+                energy_after=user.energy,
+            )
+        )
+        return
+
+    if order.plan in SUBSCRIPTION_PLANS and user:
+        await sync_user_plan_state(db, order.user_id)
+
+    # Subscription plan (monthly)
+    duration = timedelta(days=30)
+
+    existing_sub_result = await db.execute(
         select(Subscription).where(Subscription.order_id == order.id)
     )
-    sub = existing_sub.scalar_one_or_none()
+    sub = existing_sub_result.scalar_one_or_none()
 
     if sub is None:
         sub = Subscription(
@@ -171,13 +225,29 @@ async def _apply_paid_order(db: AsyncSession, order: PaymentOrder) -> None:
         )
         db.add(sub)
 
-    user = await db.get(User, order.user_id)
     if user:
         user.plan = order.plan
-        current_expiry = user.plan_expires_at if user.plan_expires_at and user.plan_expires_at > now else now
+        # Extend existing plan if currently active
+        current_expiry = (
+            user.plan_expires_at
+            if user.plan_expires_at and user.plan_expires_at > now
+            else now
+        )
         user.plan_expires_at = current_expiry + duration
-        user.max_energy = 20
-        user.energy = 20
+        user.max_energy = config.monthly_max_energy
+        # Immediately fill to new max if their energy is below it
+        if user.energy < config.monthly_max_energy:
+            gained = config.monthly_max_energy - user.energy
+            user.energy = config.monthly_max_energy
+            db.add(
+                EnergyLog(
+                    user_id=user.id,
+                    delta=gained,
+                    reason="plan_upgrade",
+                    reference_id=order.id,
+                    energy_after=user.energy,
+                )
+            )
 
 
 async def admin_review_payment_order(
@@ -205,16 +275,20 @@ async def admin_review_payment_order(
         if order.paid_at is None:
             order.paid_at = datetime.now(timezone.utc)
         await _apply_paid_order(db, order)
-    elif new_status in {"failed", "cancelled", "pending"}:
+    elif new_status in {"failed", "cancelled"}:
         order.paid_at = None
         if previous_status == "paid":
-            existing_sub_result = await db.execute(
-                select(Subscription).where(Subscription.order_id == order.id)
-            )
-            existing_sub = existing_sub_result.scalar_one_or_none()
-            if existing_sub is not None:
-                await db.delete(existing_sub)
-        await sync_user_plan_state(db, order.user_id)
+            if order.plan in SUBSCRIPTION_PLANS:
+                # Revoke subscription
+                existing_sub_result = await db.execute(
+                    select(Subscription).where(Subscription.order_id == order.id)
+                )
+                existing_sub = existing_sub_result.scalar_one_or_none()
+                if existing_sub is not None:
+                    await db.delete(existing_sub)
+            await _revert_paid_order(db, order)
+            if order.plan in SUBSCRIPTION_PLANS:
+                await sync_user_plan_state(db, order.user_id)
 
     await db.flush()
     return order

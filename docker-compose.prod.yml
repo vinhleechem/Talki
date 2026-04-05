@@ -17,14 +17,8 @@ services:
     networks:
       - talki_network
     healthcheck:
-      # python:3.12-slim không có curl; app expose GET /health (không có prefix /api)
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')",
-        ]
+      # python:3.12-slim không có curl; app: GET /health
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
       interval: 30s
       timeout: 10s
       retries: 3

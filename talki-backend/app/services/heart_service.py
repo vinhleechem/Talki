@@ -1,34 +1,41 @@
-"""Heart (energy) management service."""
+"""Heart (energy) management service — v2.1 daily reset model."""
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.models.user import EnergyLog, User
+from app.services.payment_service import get_or_create_manual_config
 
 
-async def consume_heart(
+async def consume_energy(
     db: AsyncSession,
     user_id: uuid.UUID,
+    amount: int = 1,
     reason: str = "lesson_action",
     reference_id: uuid.UUID | None = None,
 ) -> int:
-    """Deduct 1 energy point. Returns remaining energy. Raises if no energy left."""
+    """
+    Deduct `amount` energy from user. Returns remaining energy.
+    Raises ValueError if not enough energy.
+    Also performs daily reset before checking.
+    """
     user = await db.get(User, user_id)
     if not user:
         raise ValueError("User not found")
 
-    _regenerate_hearts(user)
+    await _daily_reset_if_needed(db, user)
 
-    if user.energy <= 0:
-        raise ValueError("No energy remaining. Please wait or upgrade to Premium.")
+    if user.energy < amount:
+        raise ValueError(
+            f"Không đủ năng lượng. Cần {amount} NL nhưng chỉ còn {user.energy} NL."
+        )
 
-    user.energy -= 1
+    user.energy -= amount
     db.add(
         EnergyLog(
             user_id=user_id,
-            delta=-1,
+            delta=-amount,
             reason=reason,
             reference_id=reference_id,
             energy_after=user.energy,
@@ -37,46 +44,67 @@ async def consume_heart(
     return user.energy
 
 
+# Legacy alias for backwards compatibility
+async def consume_heart(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    reason: str = "lesson_action",
+    reference_id: uuid.UUID | None = None,
+) -> int:
+    return await consume_energy(db, user_id, amount=1, reason=reason, reference_id=reference_id)
+
+
 async def get_hearts(db: AsyncSession, user_id: uuid.UUID) -> int:
     user = await db.get(User, user_id)
     if not user:
         raise ValueError("User not found")
-    _regenerate_hearts(user)
+    await _daily_reset_if_needed(db, user)
     return user.energy
 
 
-def _regenerate_hearts(user: User) -> None:
-    """Passive regen: 1 energy per HEART_REGEN_HOURS, up to max_energy."""
-    
-    # Check if plan is active
-    is_premium = user.plan in ["monthly", "yearly"]
-    if is_premium and user.plan_expires_at:
-        if datetime.now(timezone.utc) <= user.plan_expires_at:
-            # They have an active premium plan; ensure max_energy is at least 20
-            # Wait, V2.1 spec says Premium has a certain max_energy, not unlimited. 
-            # Or unlimited, but the schema uses energy and max_energy.
-            # E.g. 20. But some specs say 999 for premium. We'll use max_energy as the cap.
-            pass
-        else:
-            # Plan expired
+async def _daily_reset_if_needed(db: AsyncSession, user: User) -> None:
+    """
+    Daily energy reset logic (v2.1):
+    - If plan expired and today > expiry date → downgrade to free first
+    - Reset happens once per day when energy < max_energy
+    - If energy >= max_energy (e.g., from rescue boost) → keep as is
+    - Rescue energy above max drains naturally; next-day reset only brings up to max
+    """
+    now = datetime.now(timezone.utc)
+    today = now.date()
+
+    # Check plan expiry — but only fully revert NEXT day after expiry to be fair
+    if user.plan == "monthly" and user.plan_expires_at:
+        expiry_date = user.plan_expires_at.date() if user.plan_expires_at.tzinfo else user.plan_expires_at.date()
+        if today > expiry_date:
+            # Plan has expired; downgrade to free
+            config = await get_or_create_manual_config(db)
             user.plan = "free"
-            user.max_energy = settings.FREE_HEARTS_PER_DAY
+            user.plan_expires_at = None
+            user.max_energy = config.free_max_energy
 
-    # Max capacity varies by plan
-    max_cap = user.max_energy if getattr(user, "max_energy", None) else settings.FREE_HEARTS_PER_DAY
+    # Determine last reset date
+    last_refill = user.last_energy_refill
+    if last_refill and last_refill.tzinfo is None:
+        last_refill = last_refill.replace(tzinfo=timezone.utc)
+    last_date = last_refill.date() if last_refill else date.min
 
-    if user.energy >= max_cap:
+    # Only reset once per day
+    if today <= last_date:
         return
 
-    now = datetime.now(timezone.utc)
-    # Ensure timezone info
-    last = user.last_energy_refill.replace(tzinfo=timezone.utc) if user.last_energy_refill else now
-    
-    hours_elapsed = (now - last).total_seconds() / 3600
-    hearts_to_add = int(hours_elapsed // settings.HEART_REGEN_HOURS)
-
-    if hearts_to_add > 0:
-        user.energy = min(user.energy + hearts_to_add, max_cap)
-        user.last_energy_refill = last + timedelta(
-            hours=hearts_to_add * settings.HEART_REGEN_HOURS
+    # Reset: only fill up if energy < max_energy
+    # (rescue energy above max is preserved until it drains below max)
+    if user.energy < user.max_energy:
+        gain = user.max_energy - user.energy
+        user.energy = user.max_energy
+        db.add(
+            EnergyLog(
+                user_id=user.id,
+                delta=gain,
+                reason="daily_reset",
+                energy_after=user.energy,
+            )
         )
+
+    user.last_energy_refill = now

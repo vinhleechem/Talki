@@ -8,7 +8,7 @@ from app.models.lesson import Lesson, LessonAttemptFeedback, UserLessonProgress
 from app.models.conversation import UserMistake
 from app.models.user import User, EnergyLog
 from app.schemas.lesson import LessonAttemptFeedbackOut
-from app.services import ai_service, heart_service, achievement_service
+from app.services import ai_service, heart_service, achievement_service, payment_service
 from app.services import supabase_storage
 
 
@@ -31,10 +31,13 @@ async def evaluate_practice(
     if not lesson:
         raise ValueError("Lesson not found")
 
-    # Consume 1 heart for the attempt
-    await heart_service.consume_heart(
+    # Consume energy for this attempt (cost from admin config)
+    config = await payment_service.get_or_create_manual_config(db)
+    lesson_cost = config.lesson_practice_cost
+    await heart_service.consume_energy(
         db,
         user_id,
+        amount=lesson_cost,
         reason="lesson_action",
         reference_id=lesson_id,
     )
@@ -48,14 +51,14 @@ async def evaluate_practice(
             mime_type=mime_type
         )
     except Exception as ai_err:
-        # Hoàn lại 1 heart vì AI bị lỗi không phải lỗi của user
+        # Refund energy since AI failed (not user's fault)
         try:
             user_obj = await db.get(User, user_id)
             if user_obj:
-                user_obj.energy = min(user_obj.energy + 1, getattr(user_obj, "max_energy", 20))
+                user_obj.energy = min(user_obj.energy + lesson_cost, user_obj.max_energy)
                 db.add(EnergyLog(
                     user_id=user_id,
-                    delta=1,
+                    delta=lesson_cost,
                     reason="ai_error_refund",
                     energy_after=user_obj.energy,
                 ))
