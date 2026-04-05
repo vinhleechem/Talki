@@ -44,11 +44,11 @@ class User(Base):
 
     @property
     def is_premium(self) -> bool:
-        return self.plan in ("monthly", "yearly")
+        return self.plan == "monthly"
 
     # Subscription & Role
     role: Mapped[str] = mapped_column(String, default="user") # 'user' or 'admin'
-    plan: Mapped[str] = mapped_column(String, default="free") # 'free', 'monthly', 'yearly'
+    plan: Mapped[str] = mapped_column(String, default="free") # 'free' or 'monthly'
     plan_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Phase 2: System Progress Tracking

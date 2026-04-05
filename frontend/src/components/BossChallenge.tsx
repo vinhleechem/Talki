@@ -56,6 +56,7 @@ interface BossChallengeProps {
   personalityName: string;
   maxTurns: number;
   passScore: number;
+  bossFightCost: number;
   greetingText: string;
   greetingAudioB64: string;
 }
@@ -64,9 +65,11 @@ interface BossChallengeProps {
 
 function playBase64Audio(b64: string, fallbackText: string, mime = "audio/wav"): Promise<void> {
   return new Promise((resolve) => {
-    if (!b64) { 
-      console.warn("[BossAudio] No audio data provided, falling back to browser TTS"); 
-      if ('speechSynthesis' in window && fallbackText) {
+    if (!b64) {
+      console.warn(
+        "[BossAudio] No audio data provided, falling back to browser TTS",
+      );
+      if ("speechSynthesis" in window && fallbackText) {
         const utterance = new SpeechSynthesisUtterance(fallbackText);
         utterance.lang = "vi-VN";
         utterance.onend = () => resolve();
@@ -74,8 +77,8 @@ function playBase64Audio(b64: string, fallbackText: string, mime = "audio/wav"):
         window.speechSynthesis.speak(utterance);
         return;
       }
-      resolve(); 
-      return; 
+      resolve();
+      return;
     }
     try {
       const src = `data:${mime};base64,${b64}`;
@@ -86,7 +89,11 @@ function playBase64Audio(b64: string, fallbackText: string, mime = "audio/wav"):
         resolve(); // non-fatal
       };
       const p = audio.play();
-      if (p) p.catch((e) => { console.error("[BossAudio] play() rejected:", e); resolve(); });
+      if (p)
+        p.catch((e) => {
+          console.error("[BossAudio] play() rejected:", e);
+          resolve();
+        });
     } catch (e) {
       console.error("[BossAudio] constructor error:", e);
       resolve();
@@ -236,6 +243,7 @@ const BossChallenge = ({
   personalityName,
   maxTurns,
   passScore,
+  bossFightCost,
   greetingText,
   greetingAudioB64,
 }: BossChallengeProps) => {
@@ -304,8 +312,11 @@ const BossChallenge = ({
             return;
           setStatusSynced("processing");
           const optimText = localTranscript || "...";
-          setLocalUserText(""); // Hide real-time dashed box 
-          setMessages((prev) => [...prev, { role: "user", content: optimText, isOptimistic: true }]);
+          setLocalUserText(""); // Hide real-time dashed box
+          setMessages((prev) => [
+            ...prev,
+            { role: "user", content: optimText, isOptimistic: true },
+          ]);
           if (wsRef.current) sendAudioToWs(wsRef.current, blob);
         },
         // onSpeechStart — user started speaking
@@ -317,7 +328,7 @@ const BossChallenge = ({
         // onSpeechUpdate
         (text) => {
           if (text) setLocalUserText(text);
-        }
+        },
       );
       setStatusSynced("listening");
     } catch {
@@ -355,7 +366,7 @@ const BossChallenge = ({
       } = result;
 
       // Remove optimistic messages
-      setMessages((prev) => prev.filter(m => !m.isOptimistic));
+      setMessages((prev) => prev.filter((m) => !m.isOptimistic));
       setLocalUserText("");
 
       // Update chat
@@ -574,6 +585,9 @@ const BossChallenge = ({
               <p>• Tự động bắt đầu xử lý sau khi bạn dừng nói ~1.5 giây</p>
               <p>
                 • Giao tiếp tốt → Boss mất HP · Ngập ngừng, từ đệm → Bạn mất HP
+              </p>
+              <p>
+                • Boss Fight tốn {bossFightCost} năng lượng mỗi lần vào trận
               </p>
               <p>• Đạt {passScore}+ điểm để vượt qua Boss</p>
             </div>

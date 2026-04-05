@@ -90,6 +90,7 @@ export interface UserProfile {
   plan_expires_at: string | null;
   role: string;
   created_at: string;
+  max_energy: number;
 }
 
 // ─── Mistakes ────────────────────────────────────────────────────────────────
@@ -178,11 +179,16 @@ export interface AdminPaymentConfig {
   transfer_prefix: string;
   instructions: string | null;
   monthly_price: number;
-  yearly_price: number;
+  rescue_price: number;
+  free_max_energy: number;
+  monthly_max_energy: number;
+  rescue_energy_amount: number;
+  boss_fight_cost: number;
+  lesson_practice_cost: number;
   updated_at: string | null;
 }
 
-export type PaymentPlan = "monthly" | "yearly";
+export type PaymentPlan = "monthly" | "rescue";
 
 export interface ManualPaymentConfig {
   qr_image_url: string | null;
@@ -191,7 +197,12 @@ export interface ManualPaymentConfig {
   transfer_prefix: string;
   instructions: string | null;
   monthly_price: number;
-  yearly_price: number;
+  rescue_price: number;
+  free_max_energy: number;
+  monthly_max_energy: number;
+  rescue_energy_amount: number;
+  boss_fight_cost: number;
+  lesson_practice_cost: number;
 }
 
 export interface ManualPaymentOrder {

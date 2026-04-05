@@ -11,7 +11,7 @@ import type {
   PaymentPlan,
 } from "@/types";
 
-type RoutePlan = "monthly" | "annual" | "yearly";
+type RoutePlan = "monthly" | "rescue";
 type PaymentStatus = "created" | "pending" | "paid" | "failed" | "cancelled";
 
 const Payment = () => {
@@ -30,11 +30,11 @@ const Payment = () => {
     null,
   );
   const [orders, setOrders] = useState<ManualPaymentOrder[]>([]);
-  const [paymentConfig, setPaymentConfig] = useState<ManualPaymentConfig | null>(null);
+  const [paymentConfig, setPaymentConfig] =
+    useState<ManualPaymentConfig | null>(null);
 
   const normalizedPlan = useMemo<PaymentPlan>(() => {
-    if (plan === "annual") return "yearly";
-    if (plan === "yearly") return "yearly";
+    if (plan === "rescue") return "rescue";
     return "monthly";
   }, [plan]);
 
@@ -44,13 +44,17 @@ const Payment = () => {
   > = {
     monthly: {
       name: "Gói Tháng",
-      price: paymentConfig ? `${paymentConfig.monthly_price.toLocaleString()}đ` : "99,000đ",
+      price: paymentConfig
+        ? `${paymentConfig.monthly_price.toLocaleString()}đ`
+        : "99,000đ",
       duration: "/tháng",
     },
-    yearly: {
-      name: "Gói Năm",
-      price: paymentConfig ? `${paymentConfig.yearly_price.toLocaleString()}đ` : "999,000đ",
-      duration: "/năm",
+    rescue: {
+      name: "Gói Cứu Trợ",
+      price: paymentConfig
+        ? `${paymentConfig.rescue_price.toLocaleString()}đ`
+        : "19,000đ",
+      duration: "+9 NL ngay",
     },
   };
 
@@ -210,24 +214,24 @@ const Payment = () => {
     if (!activeOrder) return null;
     let base = activeOrder.qr_image_url;
     if (!base && activeOrder.bank_name && activeOrder.account_number) {
-        base = `https://img.vietqr.io/image/${activeOrder.bank_name.trim()}-${activeOrder.account_number.trim()}-compact2.png`;
+      base = `https://img.vietqr.io/image/${activeOrder.bank_name.trim()}-${activeOrder.account_number.trim()}-compact2.png`;
     }
     if (!base) return null;
 
     if (base.includes("img.vietqr.io")) {
-        try {
-            const url = new URL(base);
-            url.searchParams.set("amount", activeOrder.amount_vnd.toString());
-            if (activeOrder.transfer_note) {
-                url.searchParams.set("addInfo", activeOrder.transfer_note);
-            }
-            if (activeOrder.account_name) {
-                url.searchParams.set("accountName", activeOrder.account_name);
-            }
-            return url.toString();
-        } catch {
-            return base;
+      try {
+        const url = new URL(base);
+        url.searchParams.set("amount", activeOrder.amount_vnd.toString());
+        if (activeOrder.transfer_note) {
+          url.searchParams.set("addInfo", activeOrder.transfer_note);
         }
+        if (activeOrder.account_name) {
+          url.searchParams.set("accountName", activeOrder.account_name);
+        }
+        return url.toString();
+      } catch {
+        return base;
+      }
     }
     return base;
   }, [activeOrder]);
@@ -294,15 +298,27 @@ const Payment = () => {
           <div className="space-y-2 pt-4 border-t border-border">
             <div className="flex items-center gap-2 text-sm">
               <CheckCircle2 className="w-4 h-4 text-primary" />
-              <span>Mở khóa tất cả các giai đoạn</span>
+              <span>
+                {normalizedPlan === "rescue"
+                  ? "Cộng ngay 9 năng lượng, dùng ngay"
+                  : "Mở khóa tất cả các giai đoạn"}
+              </span>
             </div>
             <div className="flex items-center gap-2 text-sm">
               <CheckCircle2 className="w-4 h-4 text-primary" />
-              <span>Tất cả các Boss nâng cao</span>
+              <span>
+                {normalizedPlan === "rescue"
+                  ? "Không đổi gói hiện tại"
+                  : "Tất cả các Boss nâng cao"}
+              </span>
             </div>
             <div className="flex items-center gap-2 text-sm">
               <CheckCircle2 className="w-4 h-4 text-primary" />
-              <span>Hỗ trợ ưu tiên</span>
+              <span>
+                {normalizedPlan === "rescue"
+                  ? "Không giới hạn mức cộng tràn hiện tại"
+                  : "Hỗ trợ ưu tiên"}
+              </span>
             </div>
           </div>
         </div>
@@ -412,8 +428,12 @@ const Payment = () => {
                 )}
                 {activeOrder.admin_note && (
                   <div className="mt-3 p-2 bg-primary/10 border border-primary/20 rounded-sm">
-                    <p className="text-[10px] font-black uppercase text-primary mb-1">Ghi chú từ Admin:</p>
-                    <p className="text-sm font-bold text-foreground italic">"{activeOrder.admin_note}"</p>
+                    <p className="text-[10px] font-black uppercase text-primary mb-1">
+                      Ghi chú từ Admin:
+                    </p>
+                    <p className="text-sm font-bold text-foreground italic">
+                      "{activeOrder.admin_note}"
+                    </p>
                   </div>
                 )}
               </div>
