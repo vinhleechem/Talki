@@ -62,7 +62,7 @@ interface BossChallengeProps {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function playBase64Audio(b64: string, fallbackText: string, mime = "audio/mp3"): Promise<void> {
+function playBase64Audio(b64: string, fallbackText: string, mime = "audio/wav"): Promise<void> {
   return new Promise((resolve) => {
     if (!b64) { 
       console.warn("[BossAudio] No audio data provided, falling back to browser TTS"); 
