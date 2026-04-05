@@ -1,24 +1,26 @@
-from app.models.user import User
-from app.models.lesson import Level, Chapter, Lesson, Boss, UserLessonProgress
-from app.models.conversation import (
-    Conversation,
-    ConversationTurn,
-    ConversationFeedback,
-    UserMistake,
-)
-from app.models.payment import PaymentOrder, Subscription
+from app.models.user import User, EnergyLog
+from app.models.lesson import Chapter, Lesson, Boss, UserLessonProgress, LessonAttemptFeedback
+from app.models.payment import ManualPaymentConfig, PaymentOrder, Subscription
+from app.models.achievement import Achievement, UserAchievement
+from app.models.boss import BossConfig, BossSession
 
 __all__ = [
     "User",
-    "Level",
+    "EnergyLog",
     "Chapter",
     "Lesson",
     "Boss",
     "UserLessonProgress",
+    "LessonAttemptFeedback",
     "Conversation",
     "ConversationTurn",
     "ConversationFeedback",
     "UserMistake",
     "PaymentOrder",
     "Subscription",
+    "ManualPaymentConfig",
+    "Achievement",
+    "UserAchievement",
+    "BossConfig",
+    "BossSession",
 ]

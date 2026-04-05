@@ -1,6 +1,6 @@
 # Talki — Nền tảng luyện Phản xạ & Tự tin Giao tiếp (AI Mentor)
 
-> **Version:** 2.1 | **Ngôn ngữ mục tiêu:** Tiếng Việt | **Cập nhật:** 09/03/2026
+> **Version:** 2.1 | **Ngôn ngữ mục tiêu:** Tiếng Việt | **Cập nhật:** 11/03/2026
 
 > 📋 **Git workflow & quy tắc commit:** xem [CONTRIBUTING.md](CONTRIBUTING.md)
 
@@ -169,10 +169,11 @@ talki-backend/
     │   └── security.py       ← Decode JWT Supabase → lấy user_id
     │
     ├── models/               ← SQLAlchemy ORM models (ánh xạ DB tables)
-    │   ├── user.py           ← User (energy, plan, role)
-    │   ├── lesson.py         ← Chapter → Lesson → Boss, UserLessonProgress
-    │   └── conversation.py   ← Conversation, ConversationTurn,
-    │                           ConversationFeedback, UserMistake
+    │   ├── user.py           ← User (energy, plan, role, streak, points)
+    │   ├── lesson.py         ← Chapter → Lesson + Boss (1-1), UserLessonProgress
+    │   ├── conversation.py   ← Conversation, ConversationTurn,
+    │   │                       ConversationFeedback, UserMistake
+    │   └── achievement.py    ← Achievement, UserAchievement
     │
     ├── schemas/              ← Pydantic schemas (request/response validation)
     │   ├── user.py           ← UserPublic, UserUpdate
@@ -201,25 +202,48 @@ talki-backend/
         └── text_analysis.py  ← Đếm filler words tiếng Việt (à, ừ, kiểu như...)
 ```
 
-### 4.3 Database Schema (các bảng chính — v2.1)
+### 4.3 Database Schema (v2.1 — đầy đủ)
 
 ```
-users               → energy, max_energy, plan (free/monthly/yearly), role (user/admin)
-chapters            → boss_unlock_threshold (% hoàn thành để mở Boss Fight)
-lessons             → video_url, action_prompt (The Loop: Learn → Action → Feedback)
-bosses              → persona_prompt, max_turns, pass_score (mặc định 60 = 3/5 sao)
-user_lesson_progress → watched, stars (0-5), completed (stars >= 3)
-lesson_attempt_feedbacks → content/speed/emotion feedback cho từng lần thực hành
-conversations       → status (active/completed/abandoned), final_score, stars
-conversation_turns  → user_transcript, filler_word_count, ai_reply_text
-conversation_feedbacks → fluency/confidence/content score, advice_json
-energy_logs         → delta, reason (lesson_action/-1, boss_fight/-3, plan_upgrade)
-user_mistakes       → word_or_phrase, occurrence_count (Sổ tay lỗi)
-payment_orders      → PayOS transaction (pending → paid/failed)
-subscriptions       → gói active, liên kết với payment_orders
+── Nội dung học ────────────────────────────────────────────────────────────
+chapters                → title, boss_unlock_threshold (% lesson cần pass để mở Boss), is_published
+lessons                 → chapter_id, video_url, video_duration, action_prompt (The Loop)
+bosses                  → chapter_id (1-1), persona_prompt, mission_prompt, gender,
+                          max_turns, pass_score (mặc định 60 = 3/5 sao), is_published
+
+── Tiến độ người dùng ──────────────────────────────────────────────────────
+users                   → energy, max_energy, plan (free/monthly/yearly), role (user/admin)
+                          current_streak, highest_streak, total_points, last_active_date
+user_lesson_progress    → watched, stars (0-5), completed (stars ≥ 3), best_score, attempts
+user_chapter_progress   → completion_pct, boss_unlocked, boss_stars, boss_passed, is_unlocked
+
+── Boss Fight ───────────────────────────────────────────────────────────────
+conversations           → status (active/completed/abandoned), final_score, stars, passed
+conversation_turns      → user_transcript, filler_word_count, response_time_ms, ai_reply_text
+conversation_feedbacks  → fluency/confidence/content score (0-10), advice_json
+
+── Học tập chi tiết ─────────────────────────────────────────────────────────
+lesson_attempt_feedbacks → content_feedback, speed_feedback, emotion_feedback, stars, score
+energy_logs             → delta, reason (lesson_action/-1, boss_fight/-3, daily_refill, plan_upgrade)
+user_mistakes           → word_or_phrase, mistake_type, correction, occurrence_count (Sổ tay lỗi)
+
+── Thành tựu ────────────────────────────────────────────────────────────────
+achievements            → code, name, description, condition_type, condition_value
+user_achievements       → user_id, achievement_id, unlocked_at
+
+── Thanh toán ───────────────────────────────────────────────────────────────
+payment_orders          → PayOS transaction (pending → paid/failed), payos_order_id, payos_link
+subscriptions           → gói active, liên kết với payment_orders, expires_at
 ```
 
-Migration file: `frontend/supabase/migrations/20260309000000_talki_v2_schema.sql`
+**Migration files** (theo thứ tự apply):
+
+| File                                        | Nội dung                                                                 |
+| ------------------------------------------- | ------------------------------------------------------------------------ |
+| `20251111160401_*.sql`                      | Schema khởi đầu                                                          |
+| `20260309000000_talki_v2_schema.sql`        | Schema V2.1 chính (chapters, bosses, energy_logs...)                     |
+| `20260311162500_add_achievement_schema.sql` | Bảng `achievements`, `user_achievements`; thêm streak/points vào `users` |
+| `20260311165500_add_mistake_details.sql`    | Thêm `mistake_type`, `correction` vào `user_mistakes`                    |
 
 ### 4.4 API Endpoints
 
@@ -342,7 +366,8 @@ bun run dev
 
 ```powershell
 cd talki-backend
-pip install -r requirements.txt
+pip install -r requirements.txt # hoặc: python -m pip install -r requirements.txt
+
 Copy-Item .env.example .env   # điền DATABASE_URL, SUPABASE_*, GEMINI_API_KEY
 .\run.ps1
 # → http://localhost:8000
@@ -351,9 +376,24 @@ Copy-Item .env.example .env   # điền DATABASE_URL, SUPABASE_*, GEMINI_API_KEY
 
 ### Database
 
-> **Chỉ cần chạy 1 lần duy nhất cho cả team** — database Supabase là cloud dùng chung, dev còn lại không cần chạy lại.
+Database Supabase là cloud dùng chung — **mỗi khi có file migration mới, chỉ cần 1 người trong team chạy là đủ cho cả team**.
 
-Vào **Supabase Dashboard → SQL Editor** → paste toàn bộ nội dung file `frontend/supabase/migrations/20260309000000_talki_v2_schema.sql` → **Run**.
+**Dùng Supabase CLI (khuyên dùng):**
+
+```powershell
+# Cài Supabase CLI (chỉ cần 1 lần)
+scoop install supabase   # hoặc: winget install Supabase.CLI
+
+# Đăng nhập (chỉ cần 1 lần)
+supabase login
+
+# Link project (chỉ cần 1 lần, project-ref lấy ở Supabase Dashboard → Settings → General)
+cd frontend
+supabase link --project-ref buefytmjgobctzxbgoyx
+
+# Apply tất cả migration chưa chạy lên Supabase cloud
+supabase db push
+```
 
 ---
 

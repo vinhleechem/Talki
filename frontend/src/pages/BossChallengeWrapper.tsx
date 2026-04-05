@@ -1,165 +1,128 @@
-import { useLocation, Navigate } from "react-router-dom";
+import { useLocation, Navigate, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Loader2, AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import BossChallenge from "@/components/BossChallenge";
+import { bossApi } from "@/services/bossApi";
+import type { BossSessionResponse } from "@/services/bossApi";
 
-// Stage-based scenario configurations (for post-stage boss challenges)
-const stageScenarios: Record<string, { scenarios: string[]; personalities: string[] }> = {
-  "Giao tiếp cơ bản": {
-    scenarios: [
-      "Bạn đang tham dự một workshop về tài chính và bất ngờ gặp lại người bạn cũ ngồi cạnh",
-      "Bạn gặp người lạ tò mò hỏi về công việc của bạn",
-      "Bạn vừa chuyển đến khu phố mới và gặp hàng xóm lần đầu"
-    ],
-    personalities: [
-      "friendly and enthusiastic - người bạn vui vẻ",
-      "curious and talkative - người tọc mạch",
-      "kind and welcoming - hàng xóm thân thiện"
-    ]
-  },
-  "Giao tiếp lớp học": {
-    scenarios: [
-      "Giáo viên yêu cầu bạn phát biểu ý kiến về một chủ đề khó",
-      "Bạn cần phản biện ý kiến của bạn cùng nhóm một cách lịch sự",
-      "Bạn phải trình bày bài tập nhóm trước lớp"
-    ],
-    personalities: [
-      "strict teacher - giáo viên nghiêm khắc",
-      "skeptical classmate - bạn học hay hoài nghi",
-      "encouraging teacher - giáo viên khích lệ"
-    ]
-  },
-  "Thuyết trình đám đông": {
-    scenarios: [
-      "Bạn đang thuyết trình và có người đặt câu hỏi khó",
-      "Bạn cần thuyết phục nhà đầu tư về ý tưởng của mình",
-      "Bạn phải giải trình khi bị phản đối mạnh"
-    ],
-    personalities: [
-      "critical investor - nhà đầu tư khó tính",
-      "skeptical audience member - khán giả hoài nghi",
-      "demanding stakeholder - bên liên quan đòi hỏi cao"
-    ]
-  },
-  default: {
-    scenarios: [
-      "Bạn gặp một tình huống giao tiếp thực tế cần xử lý",
-      "Một người lạ tiếp cận bạn trong tình huống bất ngờ"
-    ],
-    personalities: [
-      "neutral and professional - trung lập và chuyên nghiệp",
-      "friendly and casual - thân thiện và thoải mái"
-    ]
-  }
-};
+// ─── Boss avatar config ───────────────────────────────────────────────────────
 
-// Lesson-based scenarios mapping
-const lessonScenarios: Record<string, { scenarios: string[], personalities: string[] }> = {
-  "Xin chào": {
-    scenarios: [
-      "Bạn đang tham dự một workshop về tài chính và bất ngờ gặp lại người bạn cũ ngồi cạnh",
-      "Bạn lạc đường và cần nhờ người lạ chỉ đường",
-      "Bạn vừa chuyển đến khu phố mới và gặp hàng xóm lần đầu"
-    ],
-    personalities: [
-      "friendly and enthusiastic - người bạn cũ vui vẻ",
-      "helpful but busy - người lạ tốt bụng nhưng hơi vội",
-      "curious and talkative - hàng xóm tọc mạch"
-    ]
-  },
-  "Cảm ơn & Xin lỗi": {
-    scenarios: [
-      "Bạn vô tình làm đổ cà phê lên áo của đồng nghiệp",
-      "Người lạ giúp bạn nhặt đồ rơi trên đường",
-      "Bạn đến muộn buổi hẹn với bạn bè"
-    ],
-    personalities: [
-      "understanding but slightly annoyed - đồng nghiệp hiểu biết nhưng hơi khó chịu",
-      "kind and patient - người lạ tử tế và kiên nhẫn",
-      "forgiving friend - bạn bè hay tha thứ"
-    ]
-  },
-  "Đồng ý & Từ chối": {
-    scenarios: [
-      "Sếp mời bạn làm thêm giờ vào cuối tuần",
-      "Bạn bè rủ đi chơi nhưng bạn đang bận",
-      "Hàng xóm nhờ trông coi nhà khi đi vắng"
-    ],
-    personalities: [
-      "demanding boss - sếp đòi hỏi cao",
-      "persuasive friend - bạn bè hay thuyết phục",
-      "friendly neighbor - hàng xóm thân thiện"
-    ]
-  },
-  "default": {
-    scenarios: [
-      "Bạn gặp một tình huống giao tiếp thực tế liên quan đến bài học này",
-      "Một người lạ tiếp cận bạn trong tình huống thực tế"
-    ],
-    personalities: [
-      "neutral and professional",
-      "friendly and casual"
-    ]
-  }
-};
+const BOSS_COLORS = [
+  "#FF6B35",
+  "#7C3AED",
+  "#0EA5E9",
+  "#16A34A",
+  "#DC2626",
+  "#EA580C",
+];
+
+function getBossVisual(personalityName: string, stageId: string) {
+  const hash = stageId.split("").reduce((a, b) => a + b.charCodeAt(0), 0);
+  const color = BOSS_COLORS[hash % BOSS_COLORS.length];
+  const firstWord = personalityName.split(" ")[0] ?? "B";
+  const displayName = personalityName.includes("-")
+    ? personalityName.split("-")[1].trim()
+    : personalityName;
+  return {
+    letter: firstWord.charAt(0).toUpperCase(),
+    color,
+    name: displayName,
+  };
+}
+
+// ─── Wrapper ──────────────────────────────────────────────────────────────────
 
 const BossChallengeWrapper = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+
   const state = location.state as {
-    stageId: number;
-    sceneId?: number;
-    lessonTitle?: string;
+    stageId: string;
     stageTitle?: string;
-    // Legacy props from old boss system
-    scenario?: string;
-    scenarioName?: string;
-    gender?: "male" | "female";
-    personality?: string;
-    personalityName?: string;
+    lessonTitle?: string;
   } | null;
 
-  if (!state) {
-    return <Navigate to="/roadmap" replace />;
-  }
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "error">(
+    "loading",
+  );
+  const [errorMsg, setErrorMsg] = useState("");
+  const [session, setSession] = useState<BossSessionResponse | null>(null);
 
-  // Stage-based boss challenge (from /roadmap after completing all lessons)
-  if (state.stageTitle && !state.lessonTitle) {
-    const stageConfig = stageScenarios[state.stageTitle] || stageScenarios["default"];
-    const randomScenario = stageConfig.scenarios[Math.floor(Math.random() * stageConfig.scenarios.length)];
-    const randomPersonality = stageConfig.personalities[Math.floor(Math.random() * stageConfig.personalities.length)];
-    const randomGender: "male" | "female" = Math.random() > 0.5 ? "male" : "female";
+  useEffect(() => {
+    if (!state) return;
 
+    async function boot() {
+      try {
+        // Just call the API with the chapter_id
+        const sess = await bossApi.createSession({
+          chapter_id: state!.stageId,
+          max_turns: 7,
+          pass_score: 60,
+        });
+
+        setSession(sess);
+        setLoadState("ready");
+      } catch (error) {
+        const e = error as any;
+        setErrorMsg(
+          e?.response?.data?.detail === "Chapter not found" || e?.response?.data?.detail?.includes("NoneType") || e?.message?.includes("NoneType")
+            ? "Chapter này đang được thiết lập Boss Fight..."
+            : e instanceof Error
+              ? e.message
+              : "Không thể bắt đầu Boss Fight"
+        );
+        setLoadState("error");
+      }
+    }
+
+    boot();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!state) return <Navigate to="/roadmap" replace />;
+
+  // ── Loading ──
+  if (loadState === "loading") {
     return (
-      <BossChallenge
-        scenario={randomScenario}
-        scenarioName={randomScenario}
-        gender={randomGender}
-        personality={randomPersonality}
-        personalityName={randomPersonality}
-        stageId={state.stageId}
-      />
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4">
+        <Loader2 className="w-10 h-10 animate-spin text-primary" />
+        <p className="font-bold text-muted-foreground">
+          Đang chuẩn bị Boss Fight...
+        </p>
+      </div>
     );
   }
 
-  // Lesson-based boss challenge (after each lesson)
-  if (state.lessonTitle) {
-    const lessonConfig = lessonScenarios[state.lessonTitle] || lessonScenarios["default"];
-    const randomScenario = lessonConfig.scenarios[Math.floor(Math.random() * lessonConfig.scenarios.length)];
-    const randomPersonality = lessonConfig.personalities[Math.floor(Math.random() * lessonConfig.personalities.length)];
-    const randomGender: "male" | "female" = Math.random() > 0.5 ? "male" : "female";
-
+  // ── Error ──
+  if (loadState === "error" || !session) {
     return (
-      <BossChallenge
-        scenario={randomScenario}
-        scenarioName={randomScenario}
-        gender={randomGender}
-        personality={randomPersonality}
-        personalityName={randomPersonality}
-        stageId={state.stageId}
-      />
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-6 text-center">
+        <AlertCircle className="w-12 h-12 text-destructive" />
+        <p className="text-xl font-black">Không thể bắt đầu</p>
+        <p className="text-muted-foreground text-sm max-w-xs">{errorMsg}</p>
+        <Button onClick={() => navigate("/roadmap")}>Về Bản đồ</Button>
+      </div>
     );
   }
 
-  // Fallback: redirect if no valid state
-  return <Navigate to="/roadmap" replace />;
+  const bossVisual = getBossVisual(session.personality, state.stageId);
+
+  return (
+    <BossChallenge
+      sessionId={session.session_id}
+      bossName={session.personality}
+      bossAvatarLetter={bossVisual.letter}
+      bossColor={bossVisual.color}
+      scenarioTitle={session.scenario_title}
+      scenarioContext={session.scenario}
+      chapterTitle={state.stageTitle}
+      personalityName={session.personality}
+      maxTurns={session.max_turns}
+      passScore={session.pass_score}
+      greetingText={session.greeting_text}
+      greetingAudioB64={session.greeting_audio_b64}
+    />
+  );
 };
 
 export default BossChallengeWrapper;

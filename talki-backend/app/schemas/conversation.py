@@ -23,12 +23,19 @@ class SpeakResponse(BaseModel):
     filler_word_count: int
     ai_reply_text: str
     ai_audio_url: str
+    user_audio_url: str | None = None
     is_last_turn: bool
 
 
 class TurnFeedback(BaseModel):
     turn_index: int
     advice: str
+
+
+class MistakeDetail(BaseModel):
+    word_or_phrase: str
+    type: str  # e.g., 'grammar', 'vocabulary', 'pronunciation', 'filler'
+    correction: str
 
 
 class FeedbackResponse(BaseModel):
@@ -39,6 +46,7 @@ class FeedbackResponse(BaseModel):
     total_filler_words: int
     summary_text: str
     advice_per_turn: list[TurnFeedback]
+    extracted_mistakes: list[MistakeDetail] = []
 
 
 class ConversationOut(BaseModel):

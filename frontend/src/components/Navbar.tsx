@@ -1,45 +1,68 @@
 import { NavLink } from "react-router-dom";
-import { Map, Castle, Trophy, User } from "lucide-react";
+import { useUser } from "@/contexts/UserContext";
+import { User } from "lucide-react";
+
+const NAV_LINKS = [
+  { path: "/roadmap", label: "Bản đồ" },
+  { path: "/pho-ban", label: "Phó Bản" },
+  { path: "/achievements", label: "Thành tựu" },
+  { path: "/profile", label: "Hồ sơ" },
+];
 
 const Navbar = () => {
-  const navItems = [
-    { path: "/roadmap", label: "Bản đồ", icon: Map },
-    { path: "/pho-ban", label: "Phó Bản", icon: Castle },
-    { path: "/achievements", label: "Thành tựu", icon: Trophy },
-    { path: "/profile", label: "Hồ sơ", icon: User },
-  ];
+  const { profile } = useUser();
 
   return (
     <nav className="fixed top-0 left-0 right-0 bg-card neo-border-b z-50">
-      <div className="container mx-auto px-4">
-        <div className="flex items-center justify-between h-16">
-          {/* Logo */}
-          <NavLink to="/roadmap" className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-primary neo-border rounded-sm flex items-center justify-center neo-shadow-sm">
-              <span className="text-2xl font-black text-primary-foreground">T</span>
+      <div className="container mx-auto px-4 md:px-8">
+        <div className="flex items-center justify-between h-16 gap-4">
+          {/* Logo → Home (T + Talki) */}
+          <NavLink to="/" className="flex items-center gap-2 flex-shrink-0 hover:opacity-80 transition-opacity">
+            <div className="bg-primary neo-border neo-shadow-sm w-10 h-10 flex items-center justify-center">
+              <span className="text-xl font-black text-primary-foreground">T</span>
             </div>
-            <span className="text-xl font-black text-foreground hidden sm:block">Talki</span>
+            <span className="text-base font-black uppercase tracking-tight">Talki</span>
           </NavLink>
 
-          {/* Navigation Links */}
-          <div className="flex items-center gap-2 sm:gap-4">
-            {navItems.map((item) => (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                className={({ isActive }) =>
-                  `flex items-center gap-2 px-3 sm:px-4 py-2 rounded-sm font-bold transition-all ${
-                    isActive
-                      ? "bg-primary text-primary-foreground neo-border neo-shadow-sm"
-                      : "hover:bg-muted"
-                  }`
-                }
-              >
-                <item.icon className="w-4 h-4" />
-                <span className="hidden sm:inline text-sm">{item.label}</span>
-              </NavLink>
-            ))}
+          {/* Nav links */}
+          <div className="flex items-center gap-4 ml-auto text-sm font-black">
+            {NAV_LINKS.map((item) => {
+              if (item.path === "/profile") {
+                return (
+                  <NavLink key={item.path} to={item.path}>
+                    {({ isActive }) => (
+                      <span
+                        className={`inline-flex items-center justify-center w-10 h-10 transition-all cursor-pointer bg-primary text-primary-foreground neo-border neo-shadow-sm hover:-translate-y-0.5 overflow-hidden`}
+                      >
+                        {profile?.avatar_url ? (
+                          <img src={profile.avatar_url} alt="avatar" className="w-full h-full object-cover" />
+                        ) : (
+                          <User className="w-5 h-5" />
+                        )}
+                      </span>
+                    )}
+                  </NavLink>
+                );
+              }
+
+              return (
+                <NavLink key={item.path} to={item.path}>
+                  {({ isActive }) => (
+                    <span
+                      className={`inline-flex items-center px-3 py-1.5 uppercase transition-all cursor-pointer ${
+                        isActive
+                          ? "text-primary border-b-2 border-primary"
+                          : "text-foreground hover:opacity-80"
+                      }`}
+                    >
+                      {item.label}
+                    </span>
+                  )}
+                </NavLink>
+              );
+            })}
           </div>
+
         </div>
       </div>
     </nav>

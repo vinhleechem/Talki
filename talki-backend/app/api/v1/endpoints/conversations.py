@@ -26,7 +26,12 @@ async def start_conversation(
 ):
     uid = uuid.UUID(user_id)
     try:
-        await consume_heart(db, uid)
+        await consume_heart(
+            db,
+            uid,
+            reason="boss_fight",
+            reference_id=body.boss_id,
+        )
     except ValueError as e:
         raise HTTPException(status_code=402, detail=str(e))
 

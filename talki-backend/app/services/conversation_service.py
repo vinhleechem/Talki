@@ -12,6 +12,7 @@ from app.models.conversation import (
     ConversationStatus,
     UserMistake,
 )
+from app.models.user import User
 from app.models.lesson import Boss
 from app.schemas.conversation import (
     FeedbackResponse,
@@ -19,7 +20,7 @@ from app.schemas.conversation import (
     StartConversationResponse,
     TurnFeedback,
 )
-from app.services import ai_service, stt_service, tts_service
+from app.services import ai_service, achievement_service, supabase_storage
 from app.utils.text_analysis import count_filler_words, total_filler_count
 
 
@@ -38,14 +39,12 @@ async def start_conversation(
 
     # AI sends first greeting
     greeting_text = f"Xin chào! Tôi là {boss.name}. Hãy bắt đầu."
-    greeting_audio = await tts_service.synthesize_speech(greeting_text)
-    audio_url = f"/audio/{convo.id}/greeting.mp3"  # placeholder; upload to storage in prod
 
     return StartConversationResponse(
         conversation_id=convo.id,
         boss_name=boss.name,
         greeting_text=greeting_text,
-        greeting_audio_url=audio_url,
+        greeting_audio_url=None,
     )
 
 
@@ -67,28 +66,23 @@ async def process_speak_turn(
         .order_by(ConversationTurn.turn_index)
     )
     existing_turns = result.scalars().all()
-    turn_index = len(existing_turns)
-
-    # STT
-    user_text = await stt_service.transcribe_audio(audio_bytes)
-    fillers = total_filler_count(user_text)
-
     # Build history for Gemini
     history = [
         {"role": "user" if i % 2 == 0 else "model", "parts": [t.user_transcript or t.ai_reply_text]}
         for i, t in enumerate(existing_turns)
     ]
+    turn_index = len(existing_turns)
 
-    # AI response
-    ai_text, should_end = await ai_service.chat_turn(
+    # AI response (Multimodal: Gemini phân tích audio và trả lời)
+    user_text, ai_text, should_end = await ai_service.chat_turn(
         persona_prompt=boss.persona_prompt,
         history=history,
-        user_text=user_text,
+        audio_bytes=audio_bytes,
     )
 
-    # TTS
-    ai_audio = await tts_service.synthesize_speech(ai_text)
-    ai_audio_url = f"/audio/{conversation_id}/turn_{turn_index}_ai.mp3"
+    fillers = count_filler_words(user_text)
+
+    ai_audio_url = None  # TTS removed – frontend handles playback if needed
 
     # Persist turn
     turn = ConversationTurn(
@@ -100,11 +94,21 @@ async def process_speak_turn(
         ai_audio_url=ai_audio_url,
     )
     db.add(turn)
+    await db.flush()
+
+    # Upload user audio
+    user_audio_url = await supabase_storage.upload_audio(
+        audio_bytes, "boss", convo.user_id, turn.id, content_type="audio/webm"
+    )
+    if user_audio_url:
+        turn.user_audio_url = user_audio_url
 
     is_last = should_end or (turn_index + 1 >= boss.max_turns)
     if is_last:
         convo.status = ConversationStatus.completed
         convo.ended_at = datetime.now(timezone.utc)
+        await db.flush()
+        await achievement_service.check_and_award_achievements(db, convo.user_id)
 
     return SpeakResponse(
         turn_index=turn_index,
@@ -112,6 +116,7 @@ async def process_speak_turn(
         filler_word_count=fillers,
         ai_reply_text=ai_text,
         ai_audio_url=ai_audio_url,
+        user_audio_url=turn.user_audio_url,
         is_last_turn=is_last,
     )
 
@@ -135,6 +140,9 @@ async def get_feedback(
     if cached:
         import json
         advice = json.loads(cached.advice_json or "[]")
+        mistakes_json = json.loads(getattr(cached, 'extracted_mistakes_json', "[]"))
+        # We don't return the full mistake list in feedback response currently, 
+        # but could if we want. It's stored in UserMistake table.
         return FeedbackResponse(
             conversation_id=conversation_id,
             fluency_score=cached.fluency_score,
@@ -143,6 +151,7 @@ async def get_feedback(
             total_filler_words=cached.total_filler_words,
             summary_text=cached.summary_text or "",
             advice_per_turn=[TurnFeedback(**a) for a in advice],
+            extracted_mistakes=mistakes_json,
         )
 
     boss = await db.get(Boss, convo.boss_id)
@@ -169,6 +178,44 @@ async def get_feedback(
         advice_json=json.dumps(raw.get("advice_per_turn", []), ensure_ascii=False),
     )
     db.add(fb)
+    
+    # Process mistakes
+    extracted_mistakes = raw.get("extracted_mistakes", [])
+    for mistake in extracted_mistakes:
+        word = mistake.get("word_or_phrase")
+        m_type = mistake.get("type")
+        correction = mistake.get("correction")
+        
+        if not word:
+            continue
+            
+        # Check if exists
+        existing_mistake_query = await db.execute(
+            select(UserMistake).where(
+                UserMistake.user_id == user_id,
+                UserMistake.word_or_phrase == word
+            )
+        )
+        existing_mistake = existing_mistake_query.scalar_one_or_none()
+        
+        if existing_mistake:
+            existing_mistake.occurrence_count += 1
+            existing_mistake.last_seen_at = datetime.now(timezone.utc)
+            if m_type:
+                existing_mistake.mistake_type = m_type
+            if correction:
+                existing_mistake.correction = correction
+        else:
+            new_mistake = UserMistake(
+                user_id=user_id,
+                word_or_phrase=word,
+                mistake_type=m_type,
+                correction=correction,
+                occurrence_count=1
+            )
+            db.add(new_mistake)
+
+    await db.flush() # Ensure mistakes and feedback are saved
 
     return FeedbackResponse(
         conversation_id=conversation_id,
@@ -178,4 +225,5 @@ async def get_feedback(
         total_filler_words=fb.total_filler_words,
         summary_text=fb.summary_text or "",
         advice_per_turn=[TurnFeedback(**a) for a in raw.get("advice_per_turn", [])],
+        extracted_mistakes=extracted_mistakes,
     )

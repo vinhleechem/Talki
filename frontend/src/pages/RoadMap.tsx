@@ -1,145 +1,93 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Lock, Check, Star, Skull } from "lucide-react";
+import { Zap, Star, Lock, Check, Skull, User } from "lucide-react";
+import { useUser } from "@/contexts/UserContext";
+import { lessonService } from "@/services/lessonService";
+import type { Chapter } from "@/types";
 import Navbar from "@/components/Navbar";
-import { useProgress } from "@/hooks/useProgress";
-import { supabase } from "@/integrations/supabase/client";
-
-interface Stage {
-  id: number;
-  title: string;
-  scenes: Scene[];
-  unlocked: boolean;
-  completed: boolean;
-}
-
-interface Scene {
-  id: number;
-  title: string;
-  unlocked: boolean;
-  completed: boolean;
-  stars: number;
-}
 
 const RoadMap = () => {
   const navigate = useNavigate();
-  const [userName, setUserName] = useState("bạn");
-  const { progress, loading, isBossUnlocked, checkBossPassed } = useProgress();
-  const [bossStatus, setBossStatus] = useState<Record<number, boolean>>({});
+  const { profile, hearts } = useUser();
+  const [chapters, setChapters] = useState<Chapter[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchUserData = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user?.user_metadata?.name) {
-        setUserName(user.user_metadata.name);
-        localStorage.setItem("userName", user.user_metadata.name);
+    const fetchChapters = async () => {
+      try {
+        const data = await lessonService.getChapters();
+        setChapters(data);
+      } catch (err) {
+        console.error("Lỗi khi tải dữ liệu bài học", err);
+      } finally {
+        setLoading(false);
       }
     };
-    fetchUserData();
+    fetchChapters();
   }, []);
 
-  useEffect(() => {
-    const checkAllBosses = async () => {
-      const statuses: Record<number, boolean> = {};
-      for (const stage of stages) {
-        statuses[stage.id] = await checkBossPassed(stage.id);
+  const isLessonUnlocked = (
+    chapterIndex: number,
+    lessonIndex: number,
+  ): boolean => {
+    // Luôn mở khóa bài đầu tiên của chapter đầu tiên
+    if (chapterIndex === 0 && lessonIndex === 0) return true;
+
+    // Nếu là bài học đầu tiên của một chương
+    if (lessonIndex === 0) {
+      if (chapterIndex === 0) return true;
+      const prevChapter = chapters[chapterIndex - 1];
+      if (!prevChapter || prevChapter.lessons.length === 0) return true;
+      const lastLesson = prevChapter.lessons[prevChapter.lessons.length - 1];
+      return lastLesson.is_completed;
+    }
+
+    // Các bài học dựa trên bài học liền trước
+    const prevLesson = chapters[chapterIndex].lessons[lessonIndex - 1];
+    return prevLesson.is_completed;
+  };
+
+  const isStageUnlocked = (chapterIndex: number): boolean => {
+    if (chapterIndex === 0) return true;
+    const prevChapter = chapters[chapterIndex - 1];
+    if (!prevChapter) return true;
+    // Để đơn giản, chương tiếp theo mở khóa nếu hoàn thành bài cuối cùng của chương trước
+    if (prevChapter.lessons.length === 0) return true;
+    return prevChapter.lessons[prevChapter.lessons.length - 1].is_completed;
+  };
+
+  const getCurrentLessonId = (chapterIndex: number): string | null => {
+    const chapter = chapters[chapterIndex];
+    if (!chapter) return null;
+    for (let i = 0; i < chapter.lessons.length; i++) {
+      if (
+        isLessonUnlocked(chapterIndex, i) &&
+        !chapter.lessons[i].is_completed
+      ) {
+        return chapter.lessons[i].id;
       }
-      setBossStatus(statuses);
-    };
-    
-    if (!loading) {
-      checkAllBosses();
     }
-  }, [loading, progress]);
-
-  const getSceneProgress = (stageId: number, sceneId: number) => {
-    const sceneProgress = progress.find(
-      p => p.stage_id === stageId && p.scene_id === sceneId
-    );
-    return {
-      completed: sceneProgress?.completed || false,
-      stars: sceneProgress?.stars || 0,
-    };
+    return null;
   };
 
-  const isSceneUnlocked = (stageId: number, sceneId: number): boolean => {
-    // First scene of first stage is always unlocked
-    if (stageId === 1 && sceneId === 1) return true;
-    
-    // Check if previous stage boss was defeated
-    if (sceneId === 1 && stageId > 1) {
-      return bossStatus[stageId - 1] === true;
-    }
-    
-    // Check if previous scene in same stage is completed
-    const prevSceneProgress = progress.find(
-      p => p.stage_id === stageId && p.scene_id === sceneId - 1 && p.completed
-    );
-    
-    return !!prevSceneProgress;
+  const handleLessonClick = (lessonIndex: number, chapterIndex: number) => {
+    if (!isLessonUnlocked(chapterIndex, lessonIndex)) return;
+    navigate("/practice", {
+      state: {
+        lesson: chapters[chapterIndex].lessons[lessonIndex],
+        chapter: chapters[chapterIndex],
+      },
+    });
   };
 
-  const [stages] = useState<Stage[]>([
-    {
-      id: 1,
-      title: "Giao tiếp cơ bản",
-      unlocked: true,
-      completed: false,
-      scenes: [
-        { id: 1, title: "Xin chào", unlocked: true, completed: true, stars: 5 },
-        { id: 2, title: "Cảm ơn & Xin lỗi", unlocked: true, completed: false, stars: 0 },
-        { id: 3, title: "Đồng ý & Từ chối", unlocked: true, completed: false, stars: 0 },
-        { id: 4, title: "Hỏi thăm", unlocked: true, completed: false, stars: 0 },
-      ],
-    },
-    {
-      id: 2,
-      title: "Giao tiếp lớp học",
-      unlocked: false,
-      completed: false,
-      scenes: [
-        { id: 5, title: "Giơ tay phát biểu", unlocked: false, completed: false, stars: 0 },
-        { id: 6, title: "Hỏi - Trả lời GV", unlocked: false, completed: false, stars: 0 },
-        { id: 7, title: "Làm việc nhóm", unlocked: false, completed: false, stars: 0 },
-        { id: 8, title: "Phản hồi & tranh luận", unlocked: false, completed: false, stars: 0 },
-      ],
-    },
-    {
-      id: 3,
-      title: "Thuyết trình đám đông",
-      unlocked: false,
-      completed: false,
-      scenes: [
-        { id: 9, title: "Chuẩn bị nội dung", unlocked: false, completed: false, stars: 0 },
-        { id: 10, title: "Diễn đạt tự tin", unlocked: false, completed: false, stars: 0 },
-        { id: 11, title: "Ứng biến khi bị hỏi", unlocked: false, completed: false, stars: 0 },
-        { id: 12, title: "Kết thúc ấn tượng", unlocked: false, completed: false, stars: 0 },
-      ],
-    },
-  ]);
-
-  const handleSceneClick = (scene: Scene, stage: Stage) => {
-    const unlocked = isSceneUnlocked(stage.id, scene.id);
-    if (!unlocked) return;
-    navigate("/practice", { state: { scene, stage } });
-  };
-
-  const handleBossClick = (stageId: number) => {
-    const stage = stages.find(s => s.id === stageId);
-    if (!stage) return;
-    
-    const totalScenes = stage.scenes.length;
-    if (!isBossUnlocked(stageId, totalScenes)) {
-      return;
-    }
-    
-    // Navigate directly to boss-challenge with stage info for random boss generation
-    navigate("/boss-challenge", { 
-      state: { 
-        stageId,
-        stageTitle: stage.title
-      } 
+  const handleBossClick = (chapter: Chapter) => {
+    if (!chapter.boss || !chapter.boss.is_unlocked) return;
+    navigate("/boss-challenge", {
+      state: {
+        stageId: chapter.id,
+        stageTitle: chapter.title,
+        boss: chapter.boss,
+      },
     });
   };
 
@@ -152,128 +100,156 @@ const RoadMap = () => {
   }
 
   return (
-    <div className="min-h-screen pb-20">
+    <div className="min-h-screen bg-background pb-32">
       <Navbar />
 
-      <div className="container mx-auto px-4 pt-24">
-        {/* Welcome */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl sm:text-4xl font-black text-foreground mb-2">
-            Chào mừng trở lại, {userName}! 👋
-          </h1>
-          <p className="text-lg font-bold text-muted-foreground">
-            Hãy tiếp tục hành trình chinh phục giao tiếp của bạn
-          </p>
+      {/* ── Sub Header (Energy, Stars) ── */}
+      <div className="sticky top-16 z-40 w-full pointer-events-none">
+        <div className="container mx-auto px-4 md:px-8">
+          <div className="flex items-center justify-end h-14 gap-3 py-2">
+            {/* Energy */}
+            <div className="flex items-center gap-1.5 bg-yellow-400 neo-border neo-shadow-sm px-3 py-1 pointer-events-auto">
+              <Zap className="w-4 h-4 fill-black text-black" />
+              <span className="font-black text-sm text-black">{hearts}/20</span>
+            </div>
+            {/* Points */}
+            <div className="hidden sm:flex items-center gap-1.5 bg-primary neo-border neo-shadow-sm px-3 py-1 pointer-events-auto">
+              <Star className="w-4 h-4 fill-white text-white" />
+              <span className="font-black text-sm text-white">0</span>
+            </div>
+          </div>
         </div>
+      </div>
 
-        {/* Road Map */}
-        <div className="max-w-4xl mx-auto space-y-12">
-          {stages.map((stage, stageIndex) => (
-            <div key={stage.id} className="relative">
-              {/* Stage Header */}
-              <div className="flex items-center gap-4 mb-6">
+      {/* ── Main Content ── */}
+      <main className="max-w-4xl mx-auto w-full px-6 pt-10 pb-12 relative">
+        {chapters.map((chapter, stageIndex) => {
+          const stageUnlocked = isStageUnlocked(stageIndex);
+          const bossUnlocked = chapter.boss?.is_unlocked;
+          const currentLessonId = getCurrentLessonId(stageIndex);
+
+          return (
+            <div key={chapter.id}>
+              <section className="mb-20">
+                {/* Chapter label */}
                 <div
-                  className={`w-16 h-16 rounded-sm flex items-center justify-center font-black text-2xl neo-border neo-shadow ${
-                    stage.unlocked
-                      ? "bg-secondary text-secondary-foreground"
-                      : "bg-muted text-muted-foreground"
+                  className={`inline-block px-4 py-1 font-black uppercase neo-shadow text-sm tracking-wider ${
+                    stageUnlocked
+                      ? "bg-foreground text-background"
+                      : "bg-muted-foreground/60 text-white"
                   }`}
                 >
-                  {stage.id}
+                  Chapter {stageIndex + 1}: {chapter.title}
                 </div>
-                <div>
-                  <h2 className="text-2xl font-black text-foreground">{stage.title}</h2>
-                  <p className="text-sm font-bold text-muted-foreground">
-                    {stage.completed
-                      ? "Hoàn thành! 🎉"
-                      : stage.unlocked
-                      ? "Đang học"
-                      : "Chưa mở khóa"}
-                  </p>
-                </div>
-              </div>
 
-              {/* Scenes Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pl-0 sm:pl-20">
-                {stage.scenes.map((scene) => {
-                  const sceneProgress = getSceneProgress(stage.id, scene.id);
-                  const unlocked = isSceneUnlocked(stage.id, scene.id);
-                  
-                  return (
-                    <button
-                      key={scene.id}
-                      onClick={() => handleSceneClick(scene, stage)}
-                      disabled={!unlocked}
-                      className={`p-4 rounded-sm neo-border text-left transition-all ${
-                        unlocked
-                          ? "bg-card hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none neo-shadow cursor-pointer"
-                          : "bg-muted cursor-not-allowed opacity-60"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <h3 className="font-bold text-foreground">{scene.title}</h3>
-                        {!unlocked && <Lock className="w-4 h-4 text-muted-foreground" />}
-                        {sceneProgress.completed && <Check className="w-4 h-4 text-secondary" />}
-                      </div>
-
-                      {/* Stars */}
-                      {sceneProgress.completed && (
-                        <div className="flex items-center gap-1">
-                          {[...Array(5)].map((_, i) => (
-                            <Star
-                              key={i}
-                              className={`w-4 h-4 ${
-                                i < sceneProgress.stars
-                                  ? "text-primary fill-primary"
-                                  : "text-muted-foreground"
-                              }`}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Boss Button */}
-              {isBossUnlocked(stage.id, stage.scenes.length) && (
-                <div className="mt-6 pl-0 sm:pl-20">
-                  <button
-                    onClick={() => handleBossClick(stage.id)}
-                    className={`w-full p-6 rounded-sm neo-border transition-all ${
-                      bossStatus[stage.id]
-                        ? "bg-secondary text-secondary-foreground neo-shadow"
-                        : "bg-primary text-primary-foreground hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none neo-shadow cursor-pointer"
+                <div className="flex flex-col items-center gap-6 mt-8">
+                  {/* Scenes grid */}
+                  <div
+                    className={`grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-2xl mx-auto ${
+                      !stageUnlocked
+                        ? "opacity-60 grayscale pointer-events-none"
+                        : ""
                     }`}
                   >
-                    <div className="flex items-center justify-center gap-3">
-                      <Skull className="w-6 h-6" />
-                      <h3 className="font-black text-xl">
-                        {bossStatus[stage.id] ? "Boss Defeated! ✓" : "Challenge Boss"}
-                      </h3>
-                      <Skull className="w-6 h-6" />
+                    {chapter.lessons.map((lesson, lessonIndex) => {
+                      const unlocked = isLessonUnlocked(
+                        stageIndex,
+                        lessonIndex,
+                      );
+                      const completed = lesson.is_completed;
+                      const isCurrent = lesson.id === currentLessonId;
+
+                      return (
+                        <button
+                          key={lesson.id}
+                          onClick={() =>
+                            handleLessonClick(lessonIndex, stageIndex)
+                          }
+                          disabled={!unlocked}
+                          className={`relative neo-border p-6 text-left min-h-[100px] flex items-center justify-between transition-all ${
+                            completed
+                              ? "bg-card neo-shadow cursor-pointer hover:-translate-y-0.5"
+                              : unlocked
+                                ? isCurrent
+                                  ? "bg-card neo-shadow cursor-pointer hover:-translate-y-0.5 outline outline-4 outline-primary/30 outline-offset-[6px]"
+                                  : "bg-card neo-shadow cursor-pointer hover:-translate-y-0.5"
+                                : "bg-muted opacity-60 cursor-not-allowed"
+                          }`}
+                        >
+                          <div className="flex-1 pr-2">
+                            <span className="font-black uppercase text-sm leading-snug block">
+                              {lesson.title}
+                            </span>
+                          </div>
+
+                          {!unlocked && (
+                            <Lock className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                          )}
+                          {completed && (
+                            <Check className="w-4 h-4 text-secondary flex-shrink-0" />
+                          )}
+
+                          {/* "ĐANG HỌC" badge */}
+                          {isCurrent && (
+                            <div className="absolute -bottom-3.5 left-4 bg-foreground text-background px-2 py-0.5 text-[10px] font-black uppercase italic z-10">
+                              Đang học
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Boss Fight card */}
+                  <div className="w-full max-w-2xl">
+                    <div
+                      className={`neo-border neo-shadow p-8 flex flex-col items-center gap-4 text-center ${
+                        bossUnlocked
+                          ? "bg-red-500 text-white"
+                          : "bg-muted opacity-70"
+                      }`}
+                    >
+                      <Skull className="w-14 h-14" />
+                      <div>
+                        <h3 className="text-2xl font-black uppercase italic">
+                          Boss Fight
+                        </h3>
+                        {bossUnlocked ? (
+                          <p className="text-sm font-bold opacity-90 mt-1">
+                            Kiểm tra kiến thức {chapter.title}
+                          </p>
+                        ) : (
+                          <p className="text-sm font-bold opacity-90 mt-1">
+                            Bài kiểm tra sẽ mở sau khi hoàn thành {chapter.boss_unlock_threshold}% tiến độ
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => handleBossClick(chapter)}
+                        disabled={!bossUnlocked}
+                        className={`bg-white text-foreground neo-border px-8 py-2 font-black uppercase text-sm neo-shadow-sm transition-all ${
+                          bossUnlocked
+                            ? "hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none cursor-pointer"
+                            : "opacity-50 cursor-not-allowed"
+                        }`}
+                      >
+                        {bossUnlocked
+                          ? "Thách đấu"
+                          : `Hoàn thành ${chapter.boss_unlock_threshold}% bài học`}
+                      </button>
                     </div>
-                    {!bossStatus[stage.id] && (
-                      <p className="text-sm font-medium text-center mt-2 opacity-90">
-                        Test your skills in a real scenario
-                      </p>
-                    )}
-                  </button>
+                  </div>
                 </div>
-              )}
-
-              {/* Connector Line */}
-              {stageIndex < stages.length - 1 && (
-                <div className="flex justify-center my-8">
-                  <div className="w-1 h-12 bg-border"></div>
-                </div>
-              )}
+              </section>
             </div>
-          ))}
-        </div>
-
-      </div>
+          );
+        })}
+        {chapters.length === 0 && (
+          <div className="text-center py-20 text-muted-foreground font-black text-xl">
+            Chưa có bài học nào được xuất bản.
+          </div>
+        )}
+      </main>
     </div>
   );
 };

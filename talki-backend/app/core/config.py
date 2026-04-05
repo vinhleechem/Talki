@@ -12,20 +12,22 @@ class Settings(BaseSettings):
 
     # Supabase (for auth & storage)
     SUPABASE_URL: str
+    SUPABASE_ANON_KEY: str = ""          # public anon key – used for user-facing auth
     SUPABASE_SERVICE_ROLE_KEY: str
     SUPABASE_JWT_SECRET: str
 
     # Google Gemini AI
     GEMINI_API_KEY: str
-    GEMINI_MODEL: str = "gemini-1.5-flash"
+    GEMINI_MODEL: str = "gemini-2.0-flash"
+    GOOGLE_CLOUD_CREDENTIALS_JSON: str = ""
 
-    # Google Cloud (STT / TTS)
-    GOOGLE_CLOUD_CREDENTIALS_JSON: str = ""  # path to service account JSON
 
-    # PayOS
-    PAYOS_CLIENT_ID: str = ""
-    PAYOS_API_KEY: str = ""
-    PAYOS_CHECKSUM_KEY: str = ""
+    # Cloudinary (media hosting for lesson videos)
+    CLOUDINARY_URL: str = ""
+    CLOUDINARY_CLOUD_NAME: str = ""
+    CLOUDINARY_API_KEY: str = ""
+    CLOUDINARY_API_SECRET: str = ""
+    CLOUDINARY_UPLOAD_FOLDER: str = "talki-lessons"
 
     # Hearts system
     FREE_HEARTS_PER_DAY: int = 3
@@ -38,6 +40,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "ignore"
 
 
 settings = Settings()

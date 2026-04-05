@@ -5,10 +5,15 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.models.user import User
+from app.models.user import EnergyLog, User
 
 
-async def consume_heart(db: AsyncSession, user_id: uuid.UUID) -> int:
+async def consume_heart(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    reason: str = "lesson_action",
+    reference_id: uuid.UUID | None = None,
+) -> int:
     """Deduct 1 energy point. Returns remaining energy. Raises if no energy left."""
     user = await db.get(User, user_id)
     if not user:
@@ -20,6 +25,15 @@ async def consume_heart(db: AsyncSession, user_id: uuid.UUID) -> int:
         raise ValueError("No energy remaining. Please wait or upgrade to Premium.")
 
     user.energy -= 1
+    db.add(
+        EnergyLog(
+            user_id=user_id,
+            delta=-1,
+            reason=reason,
+            reference_id=reference_id,
+            energy_after=user.energy,
+        )
+    )
     return user.energy
 
 

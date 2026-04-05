@@ -1,50 +1,38 @@
-"""ORM models – Level / Chapter / Lesson hierarchy."""
+"""ORM models – Chapter / Lesson / Boss hierarchy (V2.1: no separate levels table)."""
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 
 
-class Level(Base):
-    """Top-level grouping. E.g. 'Giao tiếp cơ bản', 'Kỹ năng Phỏng vấn'."""
-
-    __tablename__ = "levels"
-
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    title: Mapped[str] = mapped_column(String(200), nullable=False)
-    description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    order_index: Mapped[int] = mapped_column(Integer, default=0)
-    # % of chapter lessons needed to unlock boss (e.g. 30 for basic level)
-    boss_unlock_threshold: Mapped[int] = mapped_column(Integer, default=30)
-    is_published: Mapped[bool] = mapped_column(Boolean, default=False)
-
-    chapters: Mapped[list["Chapter"]] = relationship(back_populates="level")
-    boss: Mapped["Boss"] = relationship(back_populates="level", uselist=False)
-
-
 class Chapter(Base):
-    """Topic group inside a level."""
+    """Top-level content unit. Has lessons + one boss fight.
+    Schema V2.1: chapters IS the top level (no separate 'levels' table).
+    """
 
     __tablename__ = "chapters"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    level_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("levels.id", ondelete="CASCADE")
-    )
     title: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    thumbnail_url: Mapped[str | None] = mapped_column(String, nullable=True)
     order_index: Mapped[int] = mapped_column(Integer, default=0)
+    # % of published lessons a user must complete to unlock the boss fight
+    boss_unlock_threshold: Mapped[int] = mapped_column(Integer, default=80)
     is_published: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    level: Mapped["Level"] = relationship(back_populates="chapters")
-    lessons: Mapped[list["Lesson"]] = relationship(back_populates="chapter")
+    lessons: Mapped[list["Lesson"]] = relationship(back_populates="chapter", cascade="all, delete-orphan")
+    boss: Mapped["Boss"] = relationship(back_populates="chapter", uselist=False, cascade="all, delete-orphan")
 
 
 class Lesson(Base):
-    """Smallest content unit – Video/Theory."""
+    """Single lesson inside a chapter: Learn (video) → Action (practice) → Feedback."""
 
     __tablename__ = "lessons"
 
@@ -53,35 +41,47 @@ class Lesson(Base):
         UUID(as_uuid=True), ForeignKey("chapters.id", ondelete="CASCADE")
     )
     title: Mapped[str] = mapped_column(String(200), nullable=False)
+    # Step 1: Learn
     video_url: Mapped[str | None] = mapped_column(String, nullable=True)
-    content_markdown: Mapped[str | None] = mapped_column(Text, nullable=True)
-    duration_seconds: Mapped[int] = mapped_column(Integer, default=0)
+    video_duration: Mapped[int] = mapped_column(Integer, default=0)  # seconds
+    # Step 2: Action – situation the user must handle
+    action_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
     order_index: Mapped[int] = mapped_column(Integer, default=0)
     is_published: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     chapter: Mapped["Chapter"] = relationship(back_populates="lessons")
 
 
 class Boss(Base):
-    """One Boss per Level – unlocked when threshold lessons completed."""
+    """One Boss per Chapter – unlocked when boss_unlock_threshold% of lessons are completed."""
 
     __tablename__ = "bosses"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    level_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("levels.id", ondelete="CASCADE"), unique=True
+    chapter_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("chapters.id", ondelete="CASCADE"), unique=True
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
-    persona_prompt: Mapped[str] = mapped_column(Text, nullable=False)
-    """System prompt defining the AI role, personality, and scenario."""
-    max_turns: Mapped[int] = mapped_column(Integer, default=5)
     avatar_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Displayed to the player before entering the fight
+    mission_prompt: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    # System prompt defining the AI's persona and scenario
+    persona_prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    gender: Mapped[str] = mapped_column(String(10), default="neutral")  # male | female | neutral
+    max_turns: Mapped[int] = mapped_column(Integer, default=5)
+    # Minimum score (0-100) to pass (3/5 stars = 60%)
+    pass_score: Mapped[int] = mapped_column(Integer, default=60)
+    is_published: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    level: Mapped["Level"] = relationship(back_populates="boss")
+    chapter: Mapped["Chapter"] = relationship(back_populates="boss")
 
 
 class UserLessonProgress(Base):
-    """Tracks which lessons a user has completed – used for unlock checks."""
+    """Tracks a user's progress on a single lesson (The Loop: Learn → Action → Feedback)."""
 
     __tablename__ = "user_lesson_progress"
 
@@ -92,7 +92,46 @@ class UserLessonProgress(Base):
     lesson_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("lessons.id", ondelete="CASCADE")
     )
-    completed_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+    # Learn step
+    watched: Mapped[bool] = mapped_column(Boolean, default=False)
+    watch_percent: Mapped[int] = mapped_column(Integer, default=0)  # 0-100
+    # Action + Feedback result
+    stars: Mapped[int] = mapped_column(Integer, default=0)      # 0-5
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    best_score: Mapped[int] = mapped_column(Integer, default=0)  # 0-100
+    completed: Mapped[bool] = mapped_column(Boolean, default=False)  # true when stars >= 3
+    audio_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    transcript: Mapped[str | None] = mapped_column(Text, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class LessonAttemptFeedback(Base):
+    """AI feedback for each lesson action attempt (content / speed / emotion)."""
+
+    __tablename__ = "lesson_attempt_feedbacks"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
-    watch_percent: Mapped[int] = mapped_column(Integer, default=0)
+    lesson_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("lessons.id", ondelete="CASCADE"), index=True
+    )
+    attempt_number: Mapped[int] = mapped_column(Integer, default=1)
+    audio_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    transcript: Mapped[str | None] = mapped_column(Text, nullable=True)
+    stars: Mapped[int] = mapped_column(Integer, default=0)           # 0-5
+    # score đã bỏ, chỉ dùng overall_score (0-100); API trả score = round(overall_score)
+    content_feedback: Mapped[str | None] = mapped_column(Text, nullable=True)
+    speed_feedback: Mapped[str | None] = mapped_column(Text, nullable=True)
+    emotion_feedback: Mapped[str | None] = mapped_column(Text, nullable=True)
+    advice_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    filler_word_count: Mapped[int] = mapped_column(Integer, default=0)
+    content_score: Mapped[float] = mapped_column(Float, default=0.0)   # 0-10
+    speed_score: Mapped[float] = mapped_column(Float, default=0.0)     # 0-10
+    emotion_score: Mapped[float] = mapped_column(Float, default=0.0)   # 0-10
+    overall_score: Mapped[float] = mapped_column(Float, default=0.0)   # 0-100
+    feedback_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Store extracted mistakes for this specific attempt as JSON
+    mistakes: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True) 
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

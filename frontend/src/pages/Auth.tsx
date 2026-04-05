@@ -32,8 +32,15 @@ const Auth = () => {
           title: "Welcome back!",
           description: "Successfully logged in.",
         });
-        
-        navigate("/roadmap");
+
+        // Lấy role từ backend rồi mới navigate
+        try {
+          const { userService } = await import("@/services/userService");
+          const profile = await userService.getMe();
+          navigate(profile?.role === "admin" ? "/admin" : "/roadmap");
+        } catch {
+          navigate("/roadmap");
+        }
       } else {
         const { error } = await supabase.auth.signUp({
           email,

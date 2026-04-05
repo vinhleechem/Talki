@@ -16,18 +16,17 @@ export const useProgress = () => {
 
   const fetchProgress = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data, error } = await supabase
-        .from('user_progress')
-        .select('*')
-        .eq('user_id', user.id);
+      const { data, error } = await supabase.from("user_progress").select("*").eq("user_id", user.id);
 
       if (error) throw error;
       setProgress(data || []);
     } catch (error: any) {
-      console.error('Error fetching progress:', error);
+      console.error("Error fetching progress:", error);
     } finally {
       setLoading(false);
     }
@@ -35,50 +34,46 @@ export const useProgress = () => {
 
   const updateProgress = async (stageId: number, sceneId: number, completed: boolean, stars: number = 0) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return;
 
       // Check if progress exists
       const { data: existing } = await supabase
-        .from('user_progress')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('stage_id', stageId)
-        .eq('scene_id', sceneId)
+        .from("user_progress")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("stage_id", stageId)
+        .eq("scene_id", sceneId)
         .single();
 
       if (existing) {
         // Update existing
-        const { error } = await supabase
-          .from('user_progress')
-          .update({ completed, stars })
-          .eq('id', existing.id);
+        const { error } = await supabase.from("user_progress").update({ completed, stars }).eq("id", existing.id);
 
         if (error) throw error;
       } else {
         // Insert new
-        const { error } = await supabase
-          .from('user_progress')
-          .insert({
-            user_id: user.id,
-            stage_id: stageId,
-            scene_id: sceneId,
-            completed,
-            stars
-          });
+        const { error } = await supabase.from("user_progress").insert({
+          user_id: user.id,
+          stage_id: stageId,
+          scene_id: sceneId,
+          completed,
+          stars,
+        });
 
         if (error) throw error;
       }
 
       await fetchProgress();
-      
+
       toast({
         title: "Progress saved!",
         description: completed ? "Great job! Keep going! 🎉" : "Progress updated",
       });
-
     } catch (error: any) {
-      console.error('Error updating progress:', error);
+      console.error("Error updating progress:", error);
       toast({
         title: "Error",
         description: "Failed to save progress",
@@ -88,27 +83,30 @@ export const useProgress = () => {
   };
 
   const isStageCompleted = (stageId: number, totalScenes: number): boolean => {
-    const stageProgress = progress.filter(
-      p => p.stage_id === stageId && p.completed
-    );
+    const stageProgress = progress.filter((p) => p.stage_id === stageId && p.completed);
     return stageProgress.length === totalScenes;
   };
 
-  const isBossUnlocked = (stageId: number, totalScenes: number): boolean => {
-    return isStageCompleted(stageId, totalScenes);
+  /** thresholdPercent: 0–100, e.g. 75 means 75% of scenes must be completed */
+  const isBossUnlocked = (stageId: number, totalScenes: number, thresholdPercent = 100): boolean => {
+    const completed = progress.filter((p) => p.stage_id === stageId && p.completed).length;
+    const required = Math.ceil((totalScenes * thresholdPercent) / 100);
+    return completed >= required;
   };
 
   const checkBossPassed = async (stageId: number): Promise<boolean> => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return false;
 
       const { data } = await supabase
-        .from('boss_challenges')
-        .select('passed')
-        .eq('user_id', user.id)
-        .eq('stage_id', stageId)
-        .eq('passed', true)
+        .from("boss_challenges")
+        .select("passed")
+        .eq("user_id", user.id)
+        .eq("stage_id", stageId)
+        .eq("passed", true)
         .single();
 
       return !!data;
@@ -128,6 +126,6 @@ export const useProgress = () => {
     isStageCompleted,
     isBossUnlocked,
     checkBossPassed,
-    refetch: fetchProgress
+    refetch: fetchProgress,
   };
 };
