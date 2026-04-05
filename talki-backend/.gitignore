@@ -7,6 +7,9 @@ env/
 
 # 2. Bỏ qua file cấu hình nhạy cảm (CHỨA API KEY - TUYỆT ĐỐI KHÔNG UP)
 .env
+.env.production
+.env.development
+.env.local
 
 # 3. Bỏ qua file rác của Python (Sinh ra khi chạy code)
 __pycache__/

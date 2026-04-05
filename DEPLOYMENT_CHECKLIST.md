@@ -29,8 +29,8 @@
 - [ ] Clone repository in production directory
 - [ ] Copy environment files to VPS
 - [ ] Copy secrets to VPS
-- [ ] Run deployment script: `./scripts/deploy.sh main production`
-- [ ] Run health checks: `./scripts/healthcheck.sh production`
+- [ ] Build & start: `docker compose --env-file talki-backend/.env.production --env-file frontend/.env.production -f docker-compose.prod.yml up -d --build`
+- [ ] Health checks: `curl -f http://localhost:8000/api/health` và `curl -f http://localhost:5173`
 - [ ] Verify all services are running:
   - [ ] Backend API responding
   - [ ] Frontend loading
@@ -44,7 +44,7 @@
   - [ ] Database operations
   - [ ] File uploads (if applicable)
   - [ ] Payment processing (if applicable)
-- [ ] Monitor logs: `./scripts/logs.sh production -f`
+- [ ] Monitor logs: `docker compose --env-file talki-backend/.env.production --env-file frontend/.env.production -f docker-compose.prod.yml logs -f`
 - [ ] Set up monitoring alerts
 - [ ] Configure automatic backups
 - [ ] Test backup/restore process
@@ -64,10 +64,7 @@
 
 ## Maintenance
 
-- [ ] Set up cron jobs:
-  - [ ] Health checks (every 5 minutes)
-  - [ ] Backups (daily)
-  - [ ] Automatic updates (weekly)
+- [ ] (Tùy chọn) Cron: healthcheck `curl`, backup env/secrets, hoặc CI/CD — tự cấu hình khi cần
 - [ ] Document any issues and fixes
 - [ ] Plan regular security updates
 - [ ] Review logs weekly
@@ -78,32 +75,36 @@
 If something goes wrong:
 
 1. **Check logs first:**
+
    ```bash
-   ./scripts/logs.sh production -f
+   docker compose --env-file talki-backend/.env.production --env-file frontend/.env.production -f docker-compose.prod.yml logs -f
    ```
 
 2. **If service crashes:**
+
    ```bash
-   ./scripts/restart.sh all production
+   docker compose --env-file talki-backend/.env.production --env-file frontend/.env.production -f docker-compose.prod.yml restart
    ```
 
 3. **Database issues:**
+
    ```bash
    # Restore from backup
    # (see DEPLOYMENT_GUIDE.md for details)
    ```
 
 4. **Code issues:**
+
    ```bash
    # Revert to previous commit
    git revert <commit_hash>
-   ./scripts/deploy.sh main production
+   docker compose --env-file talki-backend/.env.production --env-file frontend/.env.production -f docker-compose.prod.yml up -d --build
    ```
 
 5. **Severe issues - rollback to previous version:**
    ```bash
    git checkout <previous_tag>
-   ./scripts/deploy.sh
+   docker compose --env-file talki-backend/.env.production --env-file frontend/.env.production -f docker-compose.prod.yml up -d --build
    ```
 
 ## Emergency Contacts

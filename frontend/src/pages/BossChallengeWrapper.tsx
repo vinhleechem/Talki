@@ -4,7 +4,9 @@ import { Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import BossChallenge from "@/components/BossChallenge";
 import { bossApi } from "@/services/bossApi";
+import { paymentApi } from "@/services/paymentService";
 import type { BossSessionResponse } from "@/services/bossApi";
+import type { ManualPaymentConfig } from "@/types";
 
 // ─── Boss avatar config ───────────────────────────────────────────────────────
 
@@ -48,13 +50,21 @@ const BossChallengeWrapper = () => {
   );
   const [errorMsg, setErrorMsg] = useState("");
   const [session, setSession] = useState<BossSessionResponse | null>(null);
+  const [paymentConfig, setPaymentConfig] =
+    useState<ManualPaymentConfig | null>(null);
 
   useEffect(() => {
     if (!state) return;
 
     async function boot() {
       try {
-        // Just call the API with the chapter_id
+        // Load payment config for cost display; do not block session if this fails
+        paymentApi
+          .getConfig()
+          .then(setPaymentConfig)
+          .catch(() => null);
+
+        // Use develop boss flow: create session by chapter_id
         const sess = await bossApi.createSession({
           chapter_id: state!.stageId,
           max_turns: 7,
@@ -64,13 +74,18 @@ const BossChallengeWrapper = () => {
         setSession(sess);
         setLoadState("ready");
       } catch (error) {
-        const e = error as any;
+        const e = error as {
+          response?: { data?: { detail?: string } };
+          message?: string;
+        };
         setErrorMsg(
-          e?.response?.data?.detail === "Chapter not found" || e?.response?.data?.detail?.includes("NoneType") || e?.message?.includes("NoneType")
+          e?.response?.data?.detail === "Chapter not found" ||
+            e?.response?.data?.detail?.includes("NoneType") ||
+            e?.message?.includes("NoneType")
             ? "Chapter này đang được thiết lập Boss Fight..."
             : e instanceof Error
               ? e.message
-              : "Không thể bắt đầu Boss Fight"
+              : "Không thể bắt đầu Boss Fight",
         );
         setLoadState("error");
       }
@@ -119,6 +134,7 @@ const BossChallengeWrapper = () => {
       personalityName={session.personality}
       maxTurns={session.max_turns}
       passScore={session.pass_score}
+      bossFightCost={paymentConfig?.boss_fight_cost ?? 3}
       greetingText={session.greeting_text}
       greetingAudioB64={session.greeting_audio_b64}
     />

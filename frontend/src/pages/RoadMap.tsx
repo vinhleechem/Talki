@@ -110,7 +110,9 @@ const RoadMap = () => {
             {/* Energy */}
             <div className="flex items-center gap-1.5 bg-yellow-400 neo-border neo-shadow-sm px-3 py-1 pointer-events-auto">
               <Zap className="w-4 h-4 fill-black text-black" />
-              <span className="font-black text-sm text-black">{hearts}/20</span>
+              <span className="font-black text-sm text-black">
+                {hearts}/{profile?.max_energy ?? 20}
+              </span>
             </div>
             {/* Points */}
             <div className="hidden sm:flex items-center gap-1.5 bg-primary neo-border neo-shadow-sm px-3 py-1 pointer-events-auto">
