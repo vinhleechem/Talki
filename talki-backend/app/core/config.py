@@ -6,6 +6,12 @@ class Settings(BaseSettings):
     APP_NAME: str = "Talki API"
     API_V1_STR: str = "/api/v1"
     DEBUG: bool = False
+    # Comma-separated origins for browser requests (add prod domain in .env.production)
+    CORS_ORIGINS: str = (
+        "http://localhost:8080,http://localhost:5173,"
+        "http://talki.id.vn,https://talki.id.vn,"
+        "http://www.talki.id.vn,https://www.talki.id.vn"
+    )
 
     # Database (Supabase Postgres)
     DATABASE_URL: str  # postgresql+asyncpg://user:pass@host/db
