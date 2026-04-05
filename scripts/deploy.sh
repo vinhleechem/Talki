@@ -46,17 +46,19 @@ if [ ! -f "secrets/google-credentials.json" ]; then
     exit 1
 fi
 
+COMPOSE_ENV_FLAGS=(--env-file "talki-backend/.env.${ENVIRONMENT}" --env-file "frontend/.env.${ENVIRONMENT}")
+
 # Stop existing containers (if any)
 echo -e "${YELLOW}⛔ Stopping existing containers...${NC}"
-docker-compose -f docker-compose.${ENVIRONMENT}.yml down 2>/dev/null || true
+docker-compose "${COMPOSE_ENV_FLAGS[@]}" -f docker-compose.${ENVIRONMENT}.yml down 2>/dev/null || true
 
 # Build new images
 echo -e "${YELLOW}🔨 Building Docker images...${NC}"
-docker-compose -f docker-compose.${ENVIRONMENT}.yml build
+docker-compose "${COMPOSE_ENV_FLAGS[@]}" -f docker-compose.${ENVIRONMENT}.yml build
 
 # Start containers
 echo -e "${YELLOW}🚀 Starting services...${NC}"
-docker-compose -f docker-compose.${ENVIRONMENT}.yml up -d
+docker-compose "${COMPOSE_ENV_FLAGS[@]}" -f docker-compose.${ENVIRONMENT}.yml up -d
 
 # Wait for services to be ready
 echo -e "${YELLOW}⏳ Waiting for services to be ready...${NC}"
@@ -70,7 +72,7 @@ if curl -f http://localhost:8000/health >/dev/null 2>&1; then
     echo -e "${GREEN}✅ Backend is healthy${NC}"
 else
     echo -e "${RED}❌ Backend health check failed${NC}"
-    docker-compose -f docker-compose.${ENVIRONMENT}.yml logs backend
+    docker-compose "${COMPOSE_ENV_FLAGS[@]}" -f docker-compose.${ENVIRONMENT}.yml logs backend
     exit 1
 fi
 
@@ -79,13 +81,13 @@ if curl -f http://localhost:5173 >/dev/null 2>&1; then
     echo -e "${GREEN}✅ Frontend is healthy${NC}"
 else
     echo -e "${RED}❌ Frontend health check failed${NC}"
-    docker-compose -f docker-compose.${ENVIRONMENT}.yml logs frontend
+    docker-compose "${COMPOSE_ENV_FLAGS[@]}" -f docker-compose.${ENVIRONMENT}.yml logs frontend
     exit 1
 fi
 
 # Display logs
 echo -e "${YELLOW}📋 Recent logs:${NC}"
-docker-compose -f docker-compose.${ENVIRONMENT}.yml logs --tail=20
+docker-compose "${COMPOSE_ENV_FLAGS[@]}" -f docker-compose.${ENVIRONMENT}.yml logs --tail=20
 
 echo -e "${GREEN}✅ Deployment completed successfully!${NC}"
 echo ""
@@ -94,5 +96,5 @@ echo "  Frontend: http://localhost:5173"
 echo "  Backend API: http://localhost:8000"
 echo "  Nginx: http://localhost"
 echo ""
-echo "View logs: docker-compose -f docker-compose.${ENVIRONMENT}.yml logs -f"
-echo "Stop services: docker-compose -f docker-compose.${ENVIRONMENT}.yml down"
+echo "View logs: docker-compose --env-file talki-backend/.env.${ENVIRONMENT} --env-file frontend/.env.${ENVIRONMENT} -f docker-compose.${ENVIRONMENT}.yml logs -f"
+echo "Stop services: docker-compose --env-file talki-backend/.env.${ENVIRONMENT} --env-file frontend/.env.${ENVIRONMENT} -f docker-compose.${ENVIRONMENT}.yml down"
