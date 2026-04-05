@@ -12,7 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.security import get_current_user_id
 from app.models.boss import BossConfig, BossSession
-from app.services import boss_service
+from app.models.user import EnergyLog, User
+from app.services import boss_service, heart_service, payment_service
 
 router = APIRouter(prefix="/boss", tags=["boss"])
 
@@ -123,6 +124,13 @@ class SessionOut(BaseModel):
     greeting_audio_b64: str
 
 
+class StartSessionOut(BaseModel):
+    charged: bool
+    charged_amount: int
+    remaining_energy: int
+    max_energy: int
+
+
 class SessionHistoryOut(BaseModel):
     id: str
     scenario: str  # Display string version of scenario context
@@ -162,7 +170,8 @@ async def create_boss_session(
     current_user_id: uuid.UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
-    """Create a new boss fight session and return greeting + session ID."""
+    """Create a new boss fight session. Energy is charged only on explicit start."""
+
     session, greeting_text, scenario_title = await boss_service.create_session(
         db=db,
         user_id=current_user_id,
@@ -192,6 +201,65 @@ async def create_boss_session(
         pass_score=session.pass_score,
         greeting_text=greeting_text,
         greeting_audio_b64=greeting_audio_b64,
+    )
+
+
+@router.post("/sessions/{session_id}/start", response_model=StartSessionOut)
+async def start_boss_session(
+    session_id: str,
+    current_user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Charge boss fight energy when user explicitly clicks start."""
+    try:
+        session_uuid = uuid.UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid session ID")
+
+    session = await db.get(BossSession, session_uuid)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session.user_id != current_user_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    config = await payment_service.get_or_create_manual_config(db)
+    boss_cost = config.boss_fight_cost
+
+    existing_charge_result = await db.execute(
+        select(EnergyLog.id).where(
+            EnergyLog.user_id == current_user_id,
+            EnergyLog.reason == "boss_fight",
+            EnergyLog.reference_id == session.id,
+        ).limit(1)
+    )
+    existing_charge = existing_charge_result.scalar_one_or_none()
+
+    charged = False
+    if existing_charge is None:
+        try:
+            await heart_service.consume_energy(
+                db,
+                current_user_id,
+                amount=boss_cost,
+                reason="boss_fight",
+                reference_id=session.id,
+            )
+            charged = True
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail=str(e),
+            )
+
+    user = await db.get(User, current_user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return StartSessionOut(
+        charged=charged,
+        charged_amount=boss_cost,
+        remaining_energy=user.energy,
+        max_energy=user.max_energy,
     )
 
 

@@ -164,7 +164,15 @@ async def submit_lesson_practice(
     try:
         return await lesson_service.evaluate_practice(db, uid, lesson_id, audio_bytes, mime_type=audio.content_type)
     except ValueError as e:
-        if "Heart" in str(e) or "heart" in str(e):
+        error_message = str(e)
+        normalized = error_message.lower()
+        if (
+            "heart" in normalized
+            or "energy" in normalized
+            or "năng lượng" in normalized
+            or "khong du nang luong" in normalized
+            or "không đủ năng lượng" in normalized
+        ):
             raise HTTPException(status_code=402, detail=str(e))
         raise HTTPException(status_code=404, detail=str(e))
     except RuntimeError as e:

@@ -14,7 +14,7 @@ router = APIRouter(prefix="/payments", tags=["payments"])
 
 
 class CreatePaymentRequest(BaseModel):
-    plan: str  # 'monthly' or 'yearly'
+    plan: str  # 'monthly' or 'rescue'
 
 
 class ManualPaymentConfigOut(BaseModel):
@@ -25,7 +25,12 @@ class ManualPaymentConfigOut(BaseModel):
     transfer_prefix: str
     instructions: str | None
     monthly_price: int
-    yearly_price: int
+    rescue_price: int
+    free_max_energy: int
+    monthly_max_energy: int
+    rescue_energy_amount: int
+    boss_fight_cost: int
+    lesson_practice_cost: int
 
 
 class ManualPaymentOrderOut(BaseModel):
@@ -89,7 +94,12 @@ async def get_manual_payment_config(
         transfer_prefix=config.transfer_prefix,
         instructions=config.instructions,
         monthly_price=config.monthly_price,
-        yearly_price=config.yearly_price,
+        rescue_price=config.rescue_price,
+        free_max_energy=config.free_max_energy,
+        monthly_max_energy=config.monthly_max_energy,
+        rescue_energy_amount=config.rescue_energy_amount,
+        boss_fight_cost=config.boss_fight_cost,
+        lesson_practice_cost=config.lesson_practice_cost,
     )
 
 

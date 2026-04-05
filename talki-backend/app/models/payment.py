@@ -22,7 +22,7 @@ class PaymentOrder(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE")
     )
-    plan: Mapped[str] = mapped_column(String, nullable=False)  # 'monthly' or 'yearly'
+    plan: Mapped[str] = mapped_column(String, nullable=False)  # 'monthly' or 'rescue'
     amount_vnd: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String, default="pending")  # 'pending', 'paid', 'failed', 'cancelled'
     transfer_note: Mapped[str | None] = mapped_column(String(120), nullable=True)
@@ -77,7 +77,13 @@ class ManualPaymentConfig(Base):
     transfer_prefix: Mapped[str] = mapped_column(String(40), default="TALKI")
     instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
     monthly_price: Mapped[int] = mapped_column(Integer, nullable=False, default=99000)
-    yearly_price: Mapped[int] = mapped_column(Integer, nullable=False, default=999000)
+    rescue_price: Mapped[int] = mapped_column(Integer, nullable=False, default=19000)
+    # Energy & cost config (tunable from Admin UI)
+    free_max_energy: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    monthly_max_energy: Mapped[int] = mapped_column(Integer, nullable=False, default=7)
+    rescue_energy_amount: Mapped[int] = mapped_column(Integer, nullable=False, default=9)
+    boss_fight_cost: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    lesson_practice_cost: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

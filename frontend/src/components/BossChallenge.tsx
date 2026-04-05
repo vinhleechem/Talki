@@ -17,12 +17,14 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import { VoiceActivityDetector } from "@/utils/voiceRecorder";
 import {
+  bossApi,
   openBossWebSocket,
   sendAudioToWs,
   sendWsControl,
 } from "@/services/bossApi";
 import type { BossTurnResult } from "@/services/bossApi";
 import Navbar from "@/components/Navbar";
+import { useUser } from "@/contexts/UserContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -56,17 +58,24 @@ interface BossChallengeProps {
   personalityName: string;
   maxTurns: number;
   passScore: number;
+  bossFightCost: number;
   greetingText: string;
   greetingAudioB64: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function playBase64Audio(b64: string, fallbackText: string, mime = "audio/wav"): Promise<void> {
+function playBase64Audio(
+  b64: string,
+  fallbackText: string,
+  mime = "audio/wav",
+): Promise<void> {
   return new Promise((resolve) => {
-    if (!b64) { 
-      console.warn("[BossAudio] No audio data provided, falling back to browser TTS"); 
-      if ('speechSynthesis' in window && fallbackText) {
+    if (!b64) {
+      console.warn(
+        "[BossAudio] No audio data provided, falling back to browser TTS",
+      );
+      if ("speechSynthesis" in window && fallbackText) {
         const utterance = new SpeechSynthesisUtterance(fallbackText);
         utterance.lang = "vi-VN";
         utterance.onend = () => resolve();
@@ -74,8 +83,8 @@ function playBase64Audio(b64: string, fallbackText: string, mime = "audio/wav"):
         window.speechSynthesis.speak(utterance);
         return;
       }
-      resolve(); 
-      return; 
+      resolve();
+      return;
     }
     try {
       const src = `data:${mime};base64,${b64}`;
@@ -86,7 +95,11 @@ function playBase64Audio(b64: string, fallbackText: string, mime = "audio/wav"):
         resolve(); // non-fatal
       };
       const p = audio.play();
-      if (p) p.catch((e) => { console.error("[BossAudio] play() rejected:", e); resolve(); });
+      if (p)
+        p.catch((e) => {
+          console.error("[BossAudio] play() rejected:", e);
+          resolve();
+        });
     } catch (e) {
       console.error("[BossAudio] constructor error:", e);
       resolve();
@@ -236,11 +249,13 @@ const BossChallenge = ({
   personalityName,
   maxTurns,
   passScore,
+  bossFightCost,
   greetingText,
   greetingAudioB64,
 }: BossChallengeProps) => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { hearts, profile, refresh } = useUser();
 
   // Game state
   const [userHp, setUserHp] = useState(100);
@@ -257,6 +272,7 @@ const BossChallenge = ({
   const [finalScore, setFinalScore] = useState<number | null>(null);
   const [finalFeedback, setFinalFeedback] = useState("");
   const [resultData, setResultData] = useState<BossTurnResult | null>(null);
+  const [isStartingFight, setIsStartingFight] = useState(false);
 
   // HP shake animations
   const [shakeUser, setShakeUser] = useState(false);
@@ -276,6 +292,8 @@ const BossChallenge = ({
 
   const progress = (turn / maxTurns) * 100;
   const passed = (finalScore ?? 0) >= passScore;
+  const maxEnergy = profile?.max_energy ?? 3;
+  const remainingAfterStart = Math.max(0, hearts - bossFightCost);
 
   /** Keep statusRef in sync so callbacks don't have stale closure */
   const setStatusSynced = useCallback((s: FightStatus) => {
@@ -304,8 +322,11 @@ const BossChallenge = ({
             return;
           setStatusSynced("processing");
           const optimText = localTranscript || "...";
-          setLocalUserText(""); // Hide real-time dashed box 
-          setMessages((prev) => [...prev, { role: "user", content: optimText, isOptimistic: true }]);
+          setLocalUserText(""); // Hide real-time dashed box
+          setMessages((prev) => [
+            ...prev,
+            { role: "user", content: optimText, isOptimistic: true },
+          ]);
           if (wsRef.current) sendAudioToWs(wsRef.current, blob);
         },
         // onSpeechStart — user started speaking
@@ -317,7 +338,7 @@ const BossChallenge = ({
         // onSpeechUpdate
         (text) => {
           if (text) setLocalUserText(text);
-        }
+        },
       );
       setStatusSynced("listening");
     } catch {
@@ -355,7 +376,7 @@ const BossChallenge = ({
       } = result;
 
       // Remove optimistic messages
-      setMessages((prev) => prev.filter(m => !m.isOptimistic));
+      setMessages((prev) => prev.filter((m) => !m.isOptimistic));
       setLocalUserText("");
 
       // Update chat
@@ -509,18 +530,57 @@ const BossChallenge = ({
   // ─── User clicks "Sẵn sàng" on the briefing screen ───────────────────────
 
   const handleStartFight = useCallback(async () => {
+    if (isStartingFight) return;
+    if (hearts < bossFightCost) {
+      toast({
+        title: "Không đủ năng lượng",
+        description: `Cần ${bossFightCost} NL để bắt đầu Boss Fight, hiện bạn có ${hearts} NL.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsStartingFight(true);
     finalizingRef.current = false;
-    setStatusSynced("connecting");
-    // Show greeting in chat
-    setMessages([{ role: "assistant", content: greetingText }]);
+    try {
+      setStatusSynced("connecting");
 
-    // Play greeting audio (Boss speaks first)
-    setStatusSynced("boss-speaking");
-    await playBase64Audio(greetingAudioB64 || "", greetingText);
+      await bossApi.startSession(sessionId);
+      await refresh();
 
-    // Now start VAD listening
-    await startListening();
-  }, [greetingText, greetingAudioB64, startListening, setStatusSynced]);
+      // Show greeting in chat
+      setMessages([{ role: "assistant", content: greetingText }]);
+
+      // Play greeting audio (Boss speaks first)
+      setStatusSynced("boss-speaking");
+      await playBase64Audio(greetingAudioB64 || "", greetingText);
+
+      // Now start VAD listening
+      await startListening();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Không thể bắt đầu Boss Fight";
+      toast({
+        title: "Không thể bắt đầu trận",
+        description: message,
+        variant: "destructive",
+      });
+      setStatusSynced("briefing");
+    } finally {
+      setIsStartingFight(false);
+    }
+  }, [
+    isStartingFight,
+    hearts,
+    bossFightCost,
+    toast,
+    sessionId,
+    refresh,
+    greetingText,
+    greetingAudioB64,
+    startListening,
+    setStatusSynced,
+  ]);
 
   // ─── Manual finish ─────────────────────────────────────────────────────────
 
@@ -539,9 +599,7 @@ const BossChallenge = ({
           <div className="bg-card neo-border neo-shadow rounded-sm p-8 space-y-6">
             {/* Boss avatar */}
             <div className="flex items-center gap-4">
-              <div
-                className="w-16 h-16 rounded-full flex items-center justify-center text-3xl font-black text-white flex-shrink-0 bg-red-500 border-[3px] border-black"
-              >
+              <div className="w-16 h-16 rounded-full flex items-center justify-center text-3xl font-black text-white flex-shrink-0 bg-red-500 border-[3px] border-black">
                 <span className="text-white text-3xl">💀</span>
               </div>
               <div>
@@ -575,8 +633,20 @@ const BossChallenge = ({
               <p>
                 • Giao tiếp tốt → Boss mất HP · Ngập ngừng, từ đệm → Bạn mất HP
               </p>
+              <p>
+                • Boss Fight tốn {bossFightCost} năng lượng mỗi lần vào trận
+              </p>
+              <p>
+                • Chỉ trừ khi bấm "Sẵn sàng - Bắt đầu", vào xem trước sẽ không
+                trừ
+              </p>
               <p>• Đạt {passScore}+ điểm để vượt qua Boss</p>
             </div>
+
+            <p className="text-xs font-black text-amber-700 bg-amber-100 neo-border rounded-sm px-3 py-2">
+              -{bossFightCost} năng lượng | năng lượng còn lại:{" "}
+              {remainingAfterStart}/{maxEnergy}
+            </p>
 
             {/* Greeting preview */}
             {greetingText && (
@@ -598,9 +668,14 @@ const BossChallenge = ({
               <Button
                 className="flex-1 text-base font-black py-5"
                 onClick={handleStartFight}
+                disabled={isStartingFight}
               >
-                <Mic className="w-5 h-5 mr-2" />
-                Sẵn sàng — Bắt đầu!
+                {isStartingFight ? (
+                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                ) : (
+                  <Mic className="w-5 h-5 mr-2" />
+                )}
+                {isStartingFight ? "Đang bắt đầu..." : "Sẵn sàng — Bắt đầu!"}
               </Button>
             </div>
           </div>
@@ -758,9 +833,13 @@ const BossChallenge = ({
   // ─── Fight screen ──────────────────────────────────────────────────────────
 
   return (
-    <div className={`min-h-screen transition-colors duration-500 bg-background`}>
+    <div
+      className={`min-h-screen transition-colors duration-500 bg-background`}
+    >
       <Navbar />
-      <div className={`container mx-auto px-4 pt-20 max-w-3xl ${bossHp < 30 ? "animate-pulse" : ""}`}>
+      <div
+        className={`container mx-auto px-4 pt-20 max-w-3xl ${bossHp < 30 ? "animate-pulse" : ""}`}
+      >
         {/* Back */}
         <div className="flex items-center gap-3 mb-4 pt-4">
           <Button
@@ -771,8 +850,12 @@ const BossChallenge = ({
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>
-            <h1 className="text-xl font-black italic">Kiểm tra kiến thức {chapterTitle}</h1>
-            <p className="text-xs font-bold text-muted-foreground uppercase">{personalityName}</p>
+            <h1 className="text-xl font-black italic">
+              Kiểm tra kiến thức {chapterTitle}
+            </h1>
+            <p className="text-xs font-bold text-muted-foreground uppercase">
+              {personalityName}
+            </p>
           </div>
           {turn > 0 && turn < maxTurns && (
             <Button
@@ -836,14 +919,14 @@ const BossChallenge = ({
 
         {/* Boss avatar */}
         <div className="bg-card neo-border neo-shadow rounded-sm p-4 mb-4 flex items-center gap-4">
-          <div
-            className="w-14 h-14 rounded-full flex items-center justify-center text-2xl font-black text-white flex-shrink-0 bg-red-500 border-[3px] border-black"
-          >
+          <div className="w-14 h-14 rounded-full flex items-center justify-center text-2xl font-black text-white flex-shrink-0 bg-red-500 border-[3px] border-black">
             <span className="text-white text-3xl">💀</span>
           </div>
           <div className="flex-1 min-w-0">
             <p className="font-black text-sm">{bossName}</p>
-            <p className="text-xs text-muted-foreground truncate">{scenarioTitle}</p>
+            <p className="text-xs text-muted-foreground truncate">
+              {scenarioTitle}
+            </p>
           </div>
           {status === "boss-speaking" && (
             <Volume2 className="w-5 h-5 text-primary animate-pulse flex-shrink-0" />
