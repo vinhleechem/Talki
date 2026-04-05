@@ -147,12 +147,12 @@ export const adminApi = {
   // Boss Configs (real API)
   listBossConfigs: () =>
     apiFetch<AdminBossConfig[]>("/admin/boss-configs"),
-  createBossConfig: (body: Omit<AdminBossConfig, "id" | "created_at">) =>
+  createBossConfig: (body: Omit<AdminBossConfig, "id" | "created_at" | "chapter_title">) =>
     apiFetch<AdminBossConfig>("/admin/boss-configs", {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  updateBossConfig: (id: string, body: Partial<AdminBossConfig>) =>
+  updateBossConfig: (id: string, body: Partial<Omit<AdminBossConfig, "id" | "created_at" | "chapter_title">>) =>
     apiFetch<AdminBossConfig>(`/admin/boss-configs/${id}`, {
       method: "PUT",
       body: JSON.stringify(body),

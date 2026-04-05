@@ -922,8 +922,8 @@ class PersonalityIn(BaseModel):
 
 class AdminBossConfigOut(BaseModel):
     id: str
-    target_id: str
-    config_type: str
+    chapter_id: str
+    chapter_title: str
     scenarios: list[ScenarioIn]
     personalities: list[PersonalityIn]
     created_at: Optional[str] = None
@@ -931,15 +931,13 @@ class AdminBossConfigOut(BaseModel):
 
 
 class AdminBossConfigCreate(BaseModel):
-    target_id: str
-    config_type: str = "stage"
+    chapter_id: uuid.UUID
     scenarios: list[ScenarioIn]
     personalities: list[PersonalityIn]
 
 
 class AdminBossConfigUpdate(BaseModel):
-    target_id: Optional[str] = None
-    config_type: Optional[str] = None
+    chapter_id: Optional[uuid.UUID] = None
     scenarios: Optional[list[ScenarioIn]] = None
     personalities: Optional[list[PersonalityIn]] = None
 
@@ -1000,8 +998,8 @@ def _normalize_personalities(raw: list | None) -> list[PersonalityIn]:
 def _boss_config_out(c: BossConfig) -> AdminBossConfigOut:
     return AdminBossConfigOut(
         id=str(c.id),
-        target_id=c.target_id,
-        config_type=c.config_type,
+        chapter_id=str(c.chapter_id),
+        chapter_title=c.chapter.title if c.chapter else "Chương đã bị xoá",
         scenarios=_normalize_scenarios(c.scenarios),
         personalities=_normalize_personalities(c.personalities),
         created_at=c.created_at.isoformat() if c.created_at else None,

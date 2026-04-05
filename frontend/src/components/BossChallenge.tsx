@@ -50,7 +50,9 @@ interface BossChallengeProps {
   bossName: string;
   bossAvatarLetter: string;
   bossColor: string;
-  scenario: string;
+  scenarioTitle: string;
+  scenarioContext: string;
+  chapterTitle: string;
   personalityName: string;
   maxTurns: number;
   passScore: number;
@@ -228,7 +230,9 @@ const BossChallenge = ({
   bossName,
   bossAvatarLetter,
   bossColor,
-  scenario,
+  scenarioTitle,
+  scenarioContext,
+  chapterTitle,
   personalityName,
   maxTurns,
   passScore,
@@ -536,21 +540,17 @@ const BossChallenge = ({
             {/* Boss avatar */}
             <div className="flex items-center gap-4">
               <div
-                className="w-16 h-16 rounded-full flex items-center justify-center text-3xl font-black text-white flex-shrink-0"
-                style={{
-                  backgroundColor: bossColor,
-                  border: "3px solid black",
-                }}
+                className="w-16 h-16 rounded-full flex items-center justify-center text-3xl font-black text-white flex-shrink-0 bg-red-500 border-[3px] border-black"
               >
-                {bossAvatarLetter}
+                <span className="text-white text-3xl">💀</span>
               </div>
               <div>
                 <p className="text-xs font-bold uppercase text-muted-foreground">
                   Boss
                 </p>
-                <h2 className="text-2xl font-black">{bossName}</h2>
-                <p className="text-sm text-muted-foreground">
-                  {personalityName}
+                <h2 className="text-2xl font-black">{scenarioTitle}</h2>
+                <p className="text-sm font-bold text-muted-foreground italic">
+                  Boss: {bossName}
                 </p>
               </div>
             </div>
@@ -560,8 +560,8 @@ const BossChallenge = ({
               <p className="text-xs font-black uppercase text-muted-foreground mb-2">
                 📍 Tình huống
               </p>
-              <p className="text-base font-medium leading-relaxed">
-                {scenario}
+              <p className="text-sm font-medium text-muted-foreground leading-relaxed">
+                {scenarioContext}
               </p>
             </div>
 
@@ -758,9 +758,9 @@ const BossChallenge = ({
   // ─── Fight screen ──────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className={`min-h-screen transition-colors duration-500 bg-background`}>
       <Navbar />
-      <div className="container mx-auto px-4 pt-20 max-w-3xl">
+      <div className={`container mx-auto px-4 pt-20 max-w-3xl ${bossHp < 30 ? "animate-pulse" : ""}`}>
         {/* Back */}
         <div className="flex items-center gap-3 mb-4 pt-4">
           <Button
@@ -771,8 +771,8 @@ const BossChallenge = ({
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>
-            <h1 className="text-xl font-black">Boss Fight</h1>
-            <p className="text-xs text-muted-foreground">{personalityName}</p>
+            <h1 className="text-xl font-black italic">Kiểm tra kiến thức {chapterTitle}</h1>
+            <p className="text-xs font-bold text-muted-foreground uppercase">{personalityName}</p>
           </div>
           {turn > 0 && turn < maxTurns && (
             <Button
@@ -837,14 +837,13 @@ const BossChallenge = ({
         {/* Boss avatar */}
         <div className="bg-card neo-border neo-shadow rounded-sm p-4 mb-4 flex items-center gap-4">
           <div
-            className="w-14 h-14 rounded-full flex items-center justify-center text-2xl font-black text-white flex-shrink-0"
-            style={{ backgroundColor: bossColor, border: "3px solid black" }}
+            className="w-14 h-14 rounded-full flex items-center justify-center text-2xl font-black text-white flex-shrink-0 bg-red-500 border-[3px] border-black"
           >
-            {bossAvatarLetter}
+            <span className="text-white text-3xl">💀</span>
           </div>
           <div className="flex-1 min-w-0">
             <p className="font-black text-sm">{bossName}</p>
-            <p className="text-xs text-muted-foreground truncate">{scenario}</p>
+            <p className="text-xs text-muted-foreground truncate">{scenarioTitle}</p>
           </div>
           {status === "boss-speaking" && (
             <Volume2 className="w-5 h-5 text-primary animate-pulse flex-shrink-0" />

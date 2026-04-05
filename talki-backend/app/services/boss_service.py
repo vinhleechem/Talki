@@ -138,56 +138,31 @@ async def list_configs(db: AsyncSession) -> list[BossConfig]:
     return list(result.scalars().all())
 
 
-async def get_config_for_target(
+async def get_config_for_chapter(
     db: AsyncSession,
-    target_id: str,
-    config_type: str = "stage",
+    chapter_id: uuid.UUID,
 ) -> Optional[BossConfig]:
     """
-    Find the best matching BossConfig for a given target.
-    Falls back to 'default' config if no specific one found.
+    Find the BossConfig for a specific chapter_id.
     """
-    norm_target = (target_id or "").strip().lower()
-    norm_type = (config_type or "stage").strip().lower()
-
-    # 1) Exact match by normalized target + config_type
-    result = await db.execute(select(BossConfig))
-    all_configs = list(result.scalars().all())
-
-    for c in all_configs:
-        if (c.config_type or "").strip().lower() == norm_type and (c.target_id or "").strip().lower() == norm_target:
-            return c
-
-    # 2) If request is lesson but missing, try stage with same target
-    if norm_type == "lesson":
-        for c in all_configs:
-            if (c.config_type or "").strip().lower() == "stage" and (c.target_id or "").strip().lower() == norm_target:
-                return c
-
-    # 3) Fallback to explicit default config
-    for c in all_configs:
-        if (c.config_type or "").strip().lower() == "default":
-            return c
-
-    # 4) Last resort: any config (oldest first from list_configs ordering behavior)
-    return all_configs[0] if all_configs else None
+    result = await db.execute(select(BossConfig).where(BossConfig.chapter_id == chapter_id))
+    return result.scalar_one_or_none()
 
 
 async def create_session(
     db: AsyncSession,
     user_id: uuid.UUID,
-    target_id: str,
-    config_type: str = "stage",
+    chapter_id: uuid.UUID,
     max_turns: int = 7,
     pass_score: int = 60,
-) -> tuple[BossSession, str]:
+) -> tuple[BossSession, str, str]:
     """
     Create a new boss fight session.
-    Returns (session, greeting_text).
+    Returns (session, greeting_text, scenario_title).
     
     Handles both new object-based scenarios/personalities and legacy string formats.
     """
-    config = await get_config_for_target(db, target_id, config_type)
+    config = await get_config_for_chapter(db, chapter_id)
 
     # Pick a random scenario and personality
     scenarios = config.scenarios if config and config.scenarios else [
@@ -243,6 +218,7 @@ async def create_session(
             "vi_display": parts[-1].strip() if len(parts) > 1 else selected_personality,
         }
 
+    scenario_title = str(selected_scenario.get("title", "Tình huống giao tiếp")).strip()
     scenario_context = str(selected_scenario.get("context", "Bạn gặp một tình huống giao tiếp thực tế.")).strip()
     greeting_opener = str(selected_scenario.get("greeting_opener", "Chào bạn!")).strip()
     personality_display = str(selected_personality.get("vi_display", "Trung lập")).strip()
@@ -264,7 +240,7 @@ async def create_session(
     await db.commit()
     await db.refresh(session)
 
-    return session, greeting
+    return session, greeting, scenario_title
 
 
 async def process_audio_turn(

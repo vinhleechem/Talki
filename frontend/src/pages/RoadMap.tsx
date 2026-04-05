@@ -214,13 +214,13 @@ const RoadMap = () => {
                         <h3 className="text-2xl font-black uppercase italic">
                           Boss Fight
                         </h3>
-                        {chapter.boss ? (
+                        {bossUnlocked ? (
                           <p className="text-sm font-bold opacity-90 mt-1">
-                            Boss theo cấu hình production của chapter này
+                            Kiểm tra kiến thức {chapter.title}
                           </p>
                         ) : (
                           <p className="text-sm font-bold opacity-90 mt-1">
-                            Kiểm tra kiến thức {chapter.title}
+                            Bài kiểm tra sẽ mở sau khi hoàn thành {chapter.boss_unlock_threshold}% tiến độ
                           </p>
                         )}
                       </div>
