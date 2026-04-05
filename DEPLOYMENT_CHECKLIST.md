@@ -78,22 +78,26 @@
 If something goes wrong:
 
 1. **Check logs first:**
+
    ```bash
    ./scripts/logs.sh production -f
    ```
 
 2. **If service crashes:**
+
    ```bash
    ./scripts/restart.sh all production
    ```
 
 3. **Database issues:**
+
    ```bash
    # Restore from backup
    # (see DEPLOYMENT_GUIDE.md for details)
    ```
 
 4. **Code issues:**
+
    ```bash
    # Revert to previous commit
    git revert <commit_hash>

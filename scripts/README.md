@@ -5,6 +5,7 @@ This directory contains helper scripts for deploying and managing the Talki appl
 ## Available Scripts
 
 ### deploy.sh
+
 Deploy the application to production.
 
 ```bash
@@ -16,6 +17,7 @@ Deploy the application to production.
 ```
 
 **What it does:**
+
 - Checks out the specified branch
 - Pulls latest changes
 - Verifies environment files exist
@@ -28,6 +30,7 @@ Deploy the application to production.
 ---
 
 ### healthcheck.sh
+
 Run health checks on all services.
 
 ```bash
@@ -38,6 +41,7 @@ Run health checks on all services.
 ```
 
 **Checks:**
+
 - All containers are running
 - Backend API is responding
 - Frontend is responding
@@ -48,6 +52,7 @@ Run health checks on all services.
 ---
 
 ### logs.sh
+
 View and follow service logs.
 
 ```bash
@@ -62,6 +67,7 @@ View and follow service logs.
 ---
 
 ### restart.sh
+
 Restart specific services.
 
 ```bash
@@ -77,6 +83,7 @@ Restart specific services.
 ---
 
 ### backup.sh
+
 Backup configuration and data.
 
 ```bash
@@ -87,6 +94,7 @@ Backup configuration and data.
 ```
 
 **Creates backup of:**
+
 - Configuration files (.env.production)
 - Volumes (if configured)
 - Database backups (manual)
@@ -98,6 +106,7 @@ Backup configuration and data.
 ## Usage Examples
 
 ### Initial Deployment
+
 ```bash
 # 1. Clone repo on VPS
 git clone https://github.com/your-repo.git
@@ -121,6 +130,7 @@ chmod +x scripts/*.sh
 ```
 
 ### Monitoring
+
 ```bash
 # Follow logs
 ./scripts/logs.sh production -f
@@ -130,12 +140,14 @@ chmod +x scripts/*.sh
 ```
 
 ### Updates
+
 ```bash
 # After pushing code to main:
 ./scripts/deploy.sh main production
 ```
 
 ### Maintenance
+
 ```bash
 # Backup before updates
 ./scripts/backup.sh production
@@ -150,6 +162,7 @@ chmod +x scripts/*.sh
 ## Troubleshooting
 
 ### Health checks fail
+
 ```bash
 # View full logs
 ./scripts/logs.sh production
@@ -159,6 +172,7 @@ docker-compose -f docker-compose.production.yml logs backend
 ```
 
 ### Out of disk space
+
 ```bash
 # Check usage
 df -h
@@ -170,6 +184,7 @@ docker system prune
 ```
 
 ### Container won't start
+
 ```bash
 # View error logs
 ./scripts/logs.sh production
@@ -194,6 +209,7 @@ Add these to your crontab (`crontab -e`):
 ## Important Notes
 
 1. **Make scripts executable:**
+
    ```bash
    chmod +x scripts/*.sh
    ```
@@ -214,6 +230,7 @@ Add these to your crontab (`crontab -e`):
 - `docker-compose.prod.yml` - Production (optimized)
 
 Choose the right one when running commands:
+
 ```bash
 docker-compose -f docker-compose.yml up -d       # Development
 docker-compose -f docker-compose.prod.yml up -d  # Production
