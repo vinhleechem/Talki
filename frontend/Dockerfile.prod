@@ -1,0 +1,30 @@
+# Build stage
+FROM oven/bun:1 AS builder
+
+WORKDIR /app
+
+# Install dependencies
+COPY package.json bun.lockb ./
+RUN bun install
+
+# Copy source code
+COPY . .
+
+# Build for production
+RUN bun run build
+
+# Runtime stage
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install serve to serve the built app
+RUN npm install -g serve
+
+# Copy built files from builder stage
+COPY --from=builder /app/dist ./dist
+
+EXPOSE 5173
+
+# Serve the app
+CMD ["serve", "-s", "dist", "-l", "5173"]

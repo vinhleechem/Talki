@@ -1,0 +1,71 @@
+version: '3.8'
+
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./talki-backend
+      dockerfile: Dockerfile.prod
+    container_name: talki_backend_prod
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./talki-backend/.env.production
+    environment:
+      - WATCHFILES_FORCE_POLLING=0
+      - GOOGLE_APPLICATION_CREDENTIALS=/keys/google-credentials.json
+    volumes:
+      - ./secrets/google-credentials.json:/keys/google-credentials.json:ro
+    restart: always
+    networks:
+      - talki_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    container_name: talki_frontend_prod
+    ports:
+      - "5173:5173"
+    env_file:
+      - ./frontend/.env.production
+    restart: always
+    networks:
+      - talki_network
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5173"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  nginx:
+    image: nginx:latest
+    container_name: talki_nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./logs/nginx:/var/log/nginx
+    restart: always
+    networks:
+      - talki_network
+    depends_on:
+      - frontend
+      - backend
+
+networks:
+  talki_network:
+    driver: bridge
