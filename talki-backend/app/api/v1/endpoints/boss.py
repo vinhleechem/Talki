@@ -31,8 +31,8 @@ class PersonalityOut(BaseModel):
 
 class BossConfigOut(BaseModel):
     id: str
-    target_id: str
-    config_type: str
+    chapter_id: str
+    chapter_title: str
     scenarios: list[ScenarioOut]
     personalities: list[PersonalityOut]
     created_at: Optional[str] = None
@@ -42,15 +42,13 @@ class BossConfigOut(BaseModel):
 
 
 class BossConfigCreate(BaseModel):
-    target_id: str
-    config_type: str = "stage"
+    chapter_id: uuid.UUID
     scenarios: list[ScenarioOut]
     personalities: list[PersonalityOut]
 
 
 class BossConfigUpdate(BaseModel):
-    target_id: Optional[str] = None
-    config_type: Optional[str] = None
+    chapter_id: Optional[uuid.UUID] = None
     scenarios: Optional[list[ScenarioOut]] = None
     personalities: Optional[list[PersonalityOut]] = None
 
@@ -109,14 +107,14 @@ def _normalize_personalities(raw: list | None) -> list[PersonalityOut]:
 
 
 class CreateSessionRequest(BaseModel):
-    target_id: str
-    config_type: str = "stage"
+    chapter_id: uuid.UUID
     max_turns: int = 7
     pass_score: int = 60
 
 
 class SessionOut(BaseModel):
     session_id: str
+    scenario_title: str
     scenario: str  # Display string version of scenario context
     personality: str  # Display name of personality
     max_turns: int
@@ -146,8 +144,8 @@ async def list_boss_configs(db: AsyncSession = Depends(get_db)):
     return [
         BossConfigOut(
             id=str(c.id),
-            target_id=c.target_id,
-            config_type=c.config_type,
+            chapter_id=str(c.chapter_id),
+            chapter_title=c.chapter.title if c.chapter else "Chương đã bị xoá",
             scenarios=_normalize_scenarios(c.scenarios),
             personalities=_normalize_personalities(c.personalities),
             created_at=c.created_at.isoformat() if c.created_at else None,
@@ -165,11 +163,10 @@ async def create_boss_session(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new boss fight session and return greeting + session ID."""
-    session, greeting_text = await boss_service.create_session(
+    session, greeting_text, scenario_title = await boss_service.create_session(
         db=db,
         user_id=current_user_id,
-        target_id=body.target_id,
-        config_type=body.config_type,
+        chapter_id=body.chapter_id,
         max_turns=body.max_turns,
         pass_score=body.pass_score,
     )
@@ -188,6 +185,7 @@ async def create_boss_session(
 
     return SessionOut(
         session_id=str(session.id),
+        scenario_title=scenario_title,
         scenario=scenario_display,
         personality=personality_display,
         max_turns=session.max_turns,

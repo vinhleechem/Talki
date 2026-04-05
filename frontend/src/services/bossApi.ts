@@ -8,6 +8,7 @@ import type { AdminBossConfig } from "@/types";
 
 export interface BossSessionResponse {
   session_id: string;
+  scenario_title: string;
   scenario: string;
   personality: string;
   max_turns: number;
@@ -59,8 +60,7 @@ export const bossApi = {
 
   /** Create a new boss fight session — returns session_id + greeting audio */
   createSession: (body: {
-    target_id: string;
-    config_type?: string;
+    chapter_id: string;
     max_turns?: number;
     pass_score?: number;
   }) =>

@@ -3811,10 +3811,9 @@ function BossAdminTabs() {
           Boss Production Flow
         </p>
         <p className="text-sm font-bold text-slate-700">
-          Một cấu hình Boss gồm: mục tiêu (lesson/stage/default) + danh sách
-          tình huống + danh sách personality.
+          Một cấu hình Boss bao gồm danh sách các tình huống và tính cách của Boss cho Chapter tương ứng.
           <br />
-          Luồng áp dụng phía user: lesson {"->"} stage {"->"} default.
+          Hệ thống sẽ tự động tìm kiếm cấu hình Boss Fight dựa trên Chapter mà người dùng vừa hoàn thành.
         </p>
       </div>
       <BossPage />
@@ -3826,13 +3825,13 @@ function BossAdminTabs() {
 
 function BossPage() {
   const [configs, setConfigs] = useState<AdminBossConfig[]>([]);
+  const [chapters, setChapters] = useState<AdminChapter[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const emptyForm = {
-    target_id: "",
-    config_type: "stage" as AdminBossConfig["config_type"],
+    chapter_id: "",
     scenarios: [{ title: "", context: "", greeting_opener: "" }],
     personalities: [{ eng_key: "", vi_display: "" }],
   };
@@ -3925,8 +3924,7 @@ function BossPage() {
     setShowForm(true);
     setEditingId(null);
     setForm(() => ({
-      target_id: "default",
-      config_type: "default",
+      chapter_id: "",
       scenarios: [...scenarioPreset],
       personalities: [...personalityPreset],
     }));
@@ -3934,10 +3932,10 @@ function BossPage() {
   };
 
   useEffect(() => {
-    adminApi
-      .listBossConfigs()
-      .then((data) => {
-        setConfigs(data);
+    Promise.all([adminApi.listBossConfigs(), adminApi.listChapters()])
+      .then(([configsData, chaptersData]) => {
+        setConfigs(configsData);
+        setChapters(chaptersData);
         setLoading(false);
       })
       .catch(handleError);
@@ -3945,8 +3943,7 @@ function BossPage() {
 
   const handleEdit = (c: AdminBossConfig) => {
     setForm({
-      target_id: c.target_id,
-      config_type: c.config_type,
+      chapter_id: c.chapter_id,
       scenarios: c.scenarios.map((s) => ({
         title: s.title,
         context: s.context,
@@ -3969,9 +3966,9 @@ function BossPage() {
   };
 
   const handleSave = async () => {
-    if (!form.target_id.trim())
+    if (!form.chapter_id)
       return toast({
-        title: "Vui lòng nhập tên Stage/Lesson",
+        title: "Vui lòng chọn Chapter",
         variant: "destructive",
       });
     setSaving(true);
@@ -4057,8 +4054,8 @@ function BossPage() {
     <>
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm font-bold text-slate-500">
-          Quản lý kịch bản và nhân vật Boss theo từng Stage / Lesson. Hệ thống
-          sẽ chọn ngẫu nhiên kịch bản phù hợp khi người dùng vào Boss Fight.
+          Quản lý kịch bản và nhân vật Boss cho từng Chapter. Hệ thống sẽ chọn
+          ngẫu nhiên tình huống và tính cách Boss khi người dùng bắt đầu thử thách.
         </p>
         <div className="flex gap-2">
           <button
@@ -4090,37 +4087,28 @@ function BossPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
               <label className="text-xs font-black uppercase text-slate-500 block mb-1">
-                Tên Stage / Lesson
-              </label>
-              <input
-                className="w-full px-3 py-2 text-sm font-bold focus:outline-none"
-                style={{ border: "2px solid black" }}
-                placeholder="VD: Giao tiếp cơ bản"
-                value={form.target_id}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, target_id: e.target.value }))
-                }
-              />
-            </div>
-            <div>
-              <label className="text-xs font-black uppercase text-slate-500 block mb-1">
-                Loại
+                Chương (Chapter)
               </label>
               <select
-                className="w-full px-3 py-2 text-sm font-bold bg-white"
+                className="w-full px-3 py-2 text-sm font-bold focus:outline-none bg-white"
                 style={{ border: "2px solid black" }}
-                value={form.config_type}
+                value={form.chapter_id}
                 onChange={(e) =>
-                  setForm((p) => ({
-                    ...p,
-                    config_type: e.target
-                      .value as AdminBossConfig["config_type"],
-                  }))
+                  setForm((p) => ({ ...p, chapter_id: e.target.value }))
                 }
               >
-                <option value="stage">Stage (sau khi hoàn thành chương)</option>
-                <option value="lesson">Lesson (sau bài học)</option>
-                <option value="default">Mặc định (fallback)</option>
+                <option value="">-- Chọn Chapter --</option>
+                {chapters
+                  .filter(
+                    (chap) =>
+                      !configs.some((c) => c.chapter_id === chap.id) ||
+                      form.chapter_id === chap.id
+                  )
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.title}
+                    </option>
+                  ))}
               </select>
             </div>
           </div>
@@ -4284,18 +4272,13 @@ function BossPage() {
                   <span
                     className="text-[10px] font-black uppercase px-2 py-0.5 mr-2"
                     style={{
-                      backgroundColor:
-                        c.config_type === "stage"
-                          ? PRIMARY
-                          : c.config_type === "lesson"
-                            ? "#0ea5e9"
-                            : "#94a3b8",
+                      backgroundColor: PRIMARY,
                       color: "white",
                     }}
                   >
-                    {c.config_type}
+                    CHAPTER
                   </span>
-                  <span className="font-black text-base">{c.target_id}</span>
+                  <span className="font-black text-base">{c.chapter_title}</span>
                 </div>
                 <div className="flex gap-2">
                   <button

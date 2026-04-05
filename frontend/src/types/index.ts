@@ -37,8 +37,8 @@ export interface Chapter {
 
 export interface AdminBossConfig {
   id: string;
-  target_id: string; // e.g., 'Giao tiếp cơ bản'
-  config_type: "stage" | "lesson" | "default";
+  chapter_id: string;
+  chapter_title: string;
   scenarios: Array<{ title: string; context: string; greeting_opener: string }>;
   personalities: Array<{ eng_key: string; vi_display: string }>;
   created_at?: string;

@@ -21,10 +21,12 @@ class BossConfig(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    # The Stage title or Lesson title this config is for
-    target_id: Mapped[str] = mapped_column(String(255), nullable=False)
-    # 'stage' | 'lesson' | 'default'
-    config_type: Mapped[str] = mapped_column(String(20), nullable=False, default="stage")
+    # The Chapter this config is tied to (1:1 mapping)
+    chapter_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("chapters.id", ondelete="CASCADE"), unique=True, nullable=False
+    )
+    
+    chapter = relationship("Chapter", lazy="joined")
     # List of scenario strings
     scenarios: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     # List of personality strings ("friendly and enthusiastic - ...")

@@ -17,8 +17,9 @@ const BOSS_COLORS = [
   "#EA580C",
 ];
 
-function getBossVisual(personalityName: string, stageId: number) {
-  const color = BOSS_COLORS[stageId % BOSS_COLORS.length];
+function getBossVisual(personalityName: string, stageId: string) {
+  const hash = stageId.split("").reduce((a, b) => a + b.charCodeAt(0), 0);
+  const color = BOSS_COLORS[hash % BOSS_COLORS.length];
   const firstWord = personalityName.split(" ")[0] ?? "B";
   const displayName = personalityName.includes("-")
     ? personalityName.split("-")[1].trim()
@@ -37,7 +38,7 @@ const BossChallengeWrapper = () => {
   const navigate = useNavigate();
 
   const state = location.state as {
-    stageId: number;
+    stageId: string;
     stageTitle?: string;
     lessonTitle?: string;
   } | null;
@@ -53,53 +54,23 @@ const BossChallengeWrapper = () => {
 
     async function boot() {
       try {
-        // Production matching rule: lesson -> stage -> default
-        const configs = await bossApi.listConfigs();
-        const normalize = (v?: string) => (v || "").trim().toLowerCase();
-
-        const lessonTitle = state!.lessonTitle?.trim();
-        const stageTitle = state!.stageTitle?.trim();
-
-        const matchedLesson = lessonTitle
-          ? configs.find(
-              (c) =>
-                c.config_type === "lesson" &&
-                normalize(c.target_id) === normalize(lessonTitle),
-            )
-          : undefined;
-
-        const matchedStage = stageTitle
-          ? configs.find(
-              (c) =>
-                c.config_type === "stage" &&
-                normalize(c.target_id) === normalize(stageTitle),
-            )
-          : undefined;
-
-        const matchedDefault =
-          configs.find((c) => c.config_type === "default") ?? configs[0];
-
-        const resolved = matchedLesson ?? matchedStage ?? matchedDefault;
-
-        if (!resolved) {
-          throw new Error(
-            "Chưa có cấu hình Boss. Admin cần tạo ít nhất 1 cấu hình default.",
-          );
-        }
-
-        // Create session — BE picks scenario + personality for us
+        // Just call the API with the chapter_id
         const sess = await bossApi.createSession({
-          target_id: resolved.target_id,
-          config_type: resolved.config_type,
+          chapter_id: state!.stageId,
           max_turns: 7,
           pass_score: 60,
         });
 
         setSession(sess);
         setLoadState("ready");
-      } catch (e) {
+      } catch (error) {
+        const e = error as any;
         setErrorMsg(
-          e instanceof Error ? e.message : "Không thể bắt đầu Boss Fight",
+          e?.response?.data?.detail === "Chapter not found" || e?.response?.data?.detail?.includes("NoneType") || e?.message?.includes("NoneType")
+            ? "Chapter này đang được thiết lập Boss Fight..."
+            : e instanceof Error
+              ? e.message
+              : "Không thể bắt đầu Boss Fight"
         );
         setLoadState("error");
       }
@@ -139,11 +110,13 @@ const BossChallengeWrapper = () => {
   return (
     <BossChallenge
       sessionId={session.session_id}
-      bossName={bossVisual.name}
+      bossName={session.personality}
       bossAvatarLetter={bossVisual.letter}
       bossColor={bossVisual.color}
-      scenario={session.scenario}
-      personalityName={bossVisual.name}
+      scenarioTitle={session.scenario_title}
+      scenarioContext={session.scenario}
+      chapterTitle={state.stageTitle}
+      personalityName={session.personality}
       maxTurns={session.max_turns}
       passScore={session.pass_score}
       greetingText={session.greeting_text}
