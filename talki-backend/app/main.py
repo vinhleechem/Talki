@@ -9,6 +9,8 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+_CORS_ORIGINS = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
+
 app = FastAPI(
     title=settings.APP_NAME,
     version="2.0.0",
@@ -18,7 +20,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8080", "http://localhost:5173"],
+    allow_origins=_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -33,8 +35,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
     origin = request.headers.get("origin", "")
     headers = {}
-    allowed_origins = ["http://localhost:8080", "http://localhost:5173"]
-    if origin in allowed_origins:
+    if origin in _CORS_ORIGINS:
         headers["Access-Control-Allow-Origin"] = origin
         headers["Access-Control-Allow-Credentials"] = "true"
     return JSONResponse(
