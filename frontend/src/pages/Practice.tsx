@@ -52,6 +52,9 @@ const Practice = () => {
   const [remoteAudioUrl, setRemoteAudioUrl] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const practiceCost = paymentConfig?.lesson_practice_cost ?? 1;
+  const maxEnergy = profile?.max_energy ?? 3;
+  const remainingAfterPractice = Math.max(0, hearts - practiceCost);
 
   useEffect(() => {
     paymentApi.getConfig().then(setPaymentConfig).catch(console.error);
@@ -144,7 +147,7 @@ const Practice = () => {
             variant: "destructive",
           });
         } finally {
-          // Backend trừ năng lượng từ đầu flow; luôn refresh để đồng bộ số hiển thị
+          // Backend chỉ trừ năng lượng khi submit audio thực sự; refresh để đồng bộ số hiển thị
           await refresh();
           setIsLoading(false);
           // Stop stream tracks
@@ -344,8 +347,11 @@ const Practice = () => {
                 </p>
               </div>
               <div className="mt-4 flex items-center gap-1 text-primary font-black text-sm">
-                <Zap className="w-4 h-4 fill-primary" />-
-                {paymentConfig?.lesson_practice_cost ?? 1} Energy
+                <Zap className="w-4 h-4 fill-primary" />-{practiceCost} Energy
+              </div>
+              <div className="mt-2 text-xs font-black text-amber-700 bg-amber-100 neo-border rounded-sm px-2 py-1 inline-block">
+                -{practiceCost} năng lượng khi nộp audio | còn lại:{" "}
+                {remainingAfterPractice}/{maxEnergy}
               </div>
             </div>
 

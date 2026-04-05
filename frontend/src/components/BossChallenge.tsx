@@ -17,12 +17,14 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import { VoiceActivityDetector } from "@/utils/voiceRecorder";
 import {
+  bossApi,
   openBossWebSocket,
   sendAudioToWs,
   sendWsControl,
 } from "@/services/bossApi";
 import type { BossTurnResult } from "@/services/bossApi";
 import Navbar from "@/components/Navbar";
+import { useUser } from "@/contexts/UserContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -253,6 +255,7 @@ const BossChallenge = ({
 }: BossChallengeProps) => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { hearts, profile, refresh } = useUser();
 
   // Game state
   const [userHp, setUserHp] = useState(100);
@@ -269,6 +272,7 @@ const BossChallenge = ({
   const [finalScore, setFinalScore] = useState<number | null>(null);
   const [finalFeedback, setFinalFeedback] = useState("");
   const [resultData, setResultData] = useState<BossTurnResult | null>(null);
+  const [isStartingFight, setIsStartingFight] = useState(false);
 
   // HP shake animations
   const [shakeUser, setShakeUser] = useState(false);
@@ -288,6 +292,8 @@ const BossChallenge = ({
 
   const progress = (turn / maxTurns) * 100;
   const passed = (finalScore ?? 0) >= passScore;
+  const maxEnergy = profile?.max_energy ?? 3;
+  const remainingAfterStart = Math.max(0, hearts - bossFightCost);
 
   /** Keep statusRef in sync so callbacks don't have stale closure */
   const setStatusSynced = useCallback((s: FightStatus) => {
@@ -524,18 +530,57 @@ const BossChallenge = ({
   // ─── User clicks "Sẵn sàng" on the briefing screen ───────────────────────
 
   const handleStartFight = useCallback(async () => {
+    if (isStartingFight) return;
+    if (hearts < bossFightCost) {
+      toast({
+        title: "Không đủ năng lượng",
+        description: `Cần ${bossFightCost} NL để bắt đầu Boss Fight, hiện bạn có ${hearts} NL.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsStartingFight(true);
     finalizingRef.current = false;
-    setStatusSynced("connecting");
-    // Show greeting in chat
-    setMessages([{ role: "assistant", content: greetingText }]);
+    try {
+      setStatusSynced("connecting");
 
-    // Play greeting audio (Boss speaks first)
-    setStatusSynced("boss-speaking");
-    await playBase64Audio(greetingAudioB64 || "", greetingText);
+      await bossApi.startSession(sessionId);
+      await refresh();
 
-    // Now start VAD listening
-    await startListening();
-  }, [greetingText, greetingAudioB64, startListening, setStatusSynced]);
+      // Show greeting in chat
+      setMessages([{ role: "assistant", content: greetingText }]);
+
+      // Play greeting audio (Boss speaks first)
+      setStatusSynced("boss-speaking");
+      await playBase64Audio(greetingAudioB64 || "", greetingText);
+
+      // Now start VAD listening
+      await startListening();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Không thể bắt đầu Boss Fight";
+      toast({
+        title: "Không thể bắt đầu trận",
+        description: message,
+        variant: "destructive",
+      });
+      setStatusSynced("briefing");
+    } finally {
+      setIsStartingFight(false);
+    }
+  }, [
+    isStartingFight,
+    hearts,
+    bossFightCost,
+    toast,
+    sessionId,
+    refresh,
+    greetingText,
+    greetingAudioB64,
+    startListening,
+    setStatusSynced,
+  ]);
 
   // ─── Manual finish ─────────────────────────────────────────────────────────
 
@@ -591,8 +636,17 @@ const BossChallenge = ({
               <p>
                 • Boss Fight tốn {bossFightCost} năng lượng mỗi lần vào trận
               </p>
+              <p>
+                • Chỉ trừ khi bấm "Sẵn sàng - Bắt đầu", vào xem trước sẽ không
+                trừ
+              </p>
               <p>• Đạt {passScore}+ điểm để vượt qua Boss</p>
             </div>
+
+            <p className="text-xs font-black text-amber-700 bg-amber-100 neo-border rounded-sm px-3 py-2">
+              -{bossFightCost} năng lượng | năng lượng còn lại:{" "}
+              {remainingAfterStart}/{maxEnergy}
+            </p>
 
             {/* Greeting preview */}
             {greetingText && (
@@ -614,9 +668,14 @@ const BossChallenge = ({
               <Button
                 className="flex-1 text-base font-black py-5"
                 onClick={handleStartFight}
+                disabled={isStartingFight}
               >
-                <Mic className="w-5 h-5 mr-2" />
-                Sẵn sàng — Bắt đầu!
+                {isStartingFight ? (
+                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                ) : (
+                  <Mic className="w-5 h-5 mr-2" />
+                )}
+                {isStartingFight ? "Đang bắt đầu..." : "Sẵn sàng — Bắt đầu!"}
               </Button>
             </div>
           </div>

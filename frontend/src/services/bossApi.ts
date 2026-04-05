@@ -17,6 +17,13 @@ export interface BossSessionResponse {
   greeting_audio_b64: string;
 }
 
+export interface BossStartResponse {
+  charged: boolean;
+  charged_amount: number;
+  remaining_energy: number;
+  max_energy: number;
+}
+
 export interface BossTurnResult {
   type: "turn_result" | "processing" | "pong" | "error";
   transcript?: string;
@@ -55,8 +62,7 @@ export interface BossSessionHistory {
 
 export const bossApi = {
   /** List all admin-configured boss scenarios (public) */
-  listConfigs: () =>
-    apiFetch<AdminBossConfig[]>("/boss/configs"),
+  listConfigs: () => apiFetch<AdminBossConfig[]>("/boss/configs"),
 
   /** Create a new boss fight session — returns session_id + greeting audio */
   createSession: (body: {
@@ -69,9 +75,14 @@ export const bossApi = {
       body: JSON.stringify(body),
     }),
 
+  /** Charge energy when user explicitly clicks start on briefing screen */
+  startSession: (sessionId: string) =>
+    apiFetch<BossStartResponse>(`/boss/sessions/${sessionId}/start`, {
+      method: "POST",
+    }),
+
   /** Get current user's past boss sessions */
-  getMyHistory: () =>
-    apiFetch<BossSessionHistory[]>("/boss/sessions/me"),
+  getMyHistory: () => apiFetch<BossSessionHistory[]>("/boss/sessions/me"),
 };
 
 // ─── WebSocket ────────────────────────────────────────────────────────────────
@@ -86,8 +97,8 @@ export async function openBossWebSocket(
   onError?: (err: Event) => void,
   onClose?: () => void,
 ): Promise<WebSocket> {
-  const { data } = await import("@/integrations/supabase/client").then(
-    (m) => m.supabase.auth.getSession(),
+  const { data } = await import("@/integrations/supabase/client").then((m) =>
+    m.supabase.auth.getSession(),
   );
   const token = data.session?.access_token ?? "";
 
@@ -139,10 +150,7 @@ export function sendAudioToWs(ws: WebSocket, blob: Blob): void {
 }
 
 /** Send a finish/ping control message */
-export function sendWsControl(
-  ws: WebSocket,
-  type: "finish" | "ping",
-): void {
+export function sendWsControl(ws: WebSocket, type: "finish" | "ping"): void {
   if (ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type }));
   }
