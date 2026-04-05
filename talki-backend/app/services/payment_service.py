@@ -173,6 +173,40 @@ async def _apply_paid_order(db: AsyncSession, order: PaymentOrder) -> None:
             )
         return  # No subscription created for rescue
 
+
+async def _revert_paid_order(db: AsyncSession, order: PaymentOrder) -> None:
+    """Undo effects of a previously paid order if admin revokes it."""
+    config = await get_or_create_manual_config(db)
+    user = await db.get(User, order.user_id)
+
+    if order.plan == "rescue" and user:
+        existing_result = await db.execute(
+            select(EnergyLog)
+            .where(
+                EnergyLog.user_id == user.id,
+                EnergyLog.reference_id == order.id,
+                EnergyLog.reason == "rescue_topup",
+            )
+            .order_by(EnergyLog.created_at.desc())
+            .limit(1)
+        )
+        existing_log = existing_result.scalar_one_or_none()
+        revert_amount = int(existing_log.delta) if existing_log else config.rescue_energy_amount
+        user.energy = max(0, user.energy - revert_amount)
+        db.add(
+            EnergyLog(
+                user_id=user.id,
+                delta=-revert_amount,
+                reason="rescue_revert",
+                reference_id=order.id,
+                energy_after=user.energy,
+            )
+        )
+        return
+
+    if order.plan in SUBSCRIPTION_PLANS and user:
+        await sync_user_plan_state(db, order.user_id)
+
     # Subscription plan (monthly)
     duration = timedelta(days=30)
 
@@ -243,17 +277,18 @@ async def admin_review_payment_order(
         await _apply_paid_order(db, order)
     elif new_status in {"failed", "cancelled"}:
         order.paid_at = None
-        if previous_status == "paid" and order.plan in SUBSCRIPTION_PLANS:
-            # Revoke subscription
-            existing_sub_result = await db.execute(
-                select(Subscription).where(Subscription.order_id == order.id)
-            )
-            existing_sub = existing_sub_result.scalar_one_or_none()
-            if existing_sub is not None:
-                await db.delete(existing_sub)
-        # Note: rescue energy already consumed/given, we don't take it back
-        if order.plan in SUBSCRIPTION_PLANS:
-            await sync_user_plan_state(db, order.user_id)
+        if previous_status == "paid":
+            if order.plan in SUBSCRIPTION_PLANS:
+                # Revoke subscription
+                existing_sub_result = await db.execute(
+                    select(Subscription).where(Subscription.order_id == order.id)
+                )
+                existing_sub = existing_sub_result.scalar_one_or_none()
+                if existing_sub is not None:
+                    await db.delete(existing_sub)
+            await _revert_paid_order(db, order)
+            if order.plan in SUBSCRIPTION_PLANS:
+                await sync_user_plan_state(db, order.user_id)
 
     await db.flush()
     return order

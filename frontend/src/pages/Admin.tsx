@@ -4562,6 +4562,31 @@ function PaymentsPage() {
         <h3 className="text-lg font-black uppercase mb-3">
           Cấu hình nhận chuyển khoản
         </h3>
+        <div
+          className="mb-4 bg-slate-50 p-3 text-xs font-bold text-slate-700 space-y-1"
+          style={{ border: "2px solid black" }}
+        >
+          <p>
+            • <span className="font-black">Giá Monthly</span>: số tiền user trả
+            để mua gói tháng.
+          </p>
+          <p>
+            • <span className="font-black">Giá Rescue</span>: phí nạp cứu trợ,
+            duyệt xong cộng ngay {configForm.rescue_energy_amount} NL.
+          </p>
+          <p>
+            • <span className="font-black">Max NL Free</span>: mức tối đa của
+            user free sau khi reset ngày mới.
+          </p>
+          <p>
+            • <span className="font-black">Max NL Monthly</span>: mức tối đa của
+            user monthly sau khi reset ngày mới.
+          </p>
+          <p>
+            • <span className="font-black">Phí Boss / Practice</span>: năng
+            lượng trừ khi vào boss fight hoặc làm bài luyện tập.
+          </p>
+        </div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <div className="flex flex-col gap-2">
             <div
@@ -4726,7 +4751,7 @@ function PaymentsPage() {
               </div>
               <div>
                 <label className="text-xs font-black uppercase text-slate-500 mb-1 block">
-                  Max NL Gói Free
+                  Max NL Gói Free / ngày
                 </label>
                 <input
                   type="number"
@@ -4743,7 +4768,7 @@ function PaymentsPage() {
               </div>
               <div>
                 <label className="text-xs font-black uppercase text-slate-500 mb-1 block">
-                  Max NL Gói Month
+                  Max NL Gói Monthly / ngày
                 </label>
                 <input
                   type="number"
@@ -4760,7 +4785,7 @@ function PaymentsPage() {
               </div>
               <div>
                 <label className="text-xs font-black uppercase text-slate-500 mb-1 block">
-                  Tặng NL Gói Rescue
+                  NL cộng thêm khi mua Rescue
                 </label>
                 <input
                   type="number"
@@ -4777,7 +4802,7 @@ function PaymentsPage() {
               </div>
               <div>
                 <label className="text-xs font-black uppercase text-slate-500 mb-1 block">
-                  Phí Đánh Boss
+                  Phí Boss Fight (NL)
                 </label>
                 <input
                   type="number"
@@ -4794,7 +4819,7 @@ function PaymentsPage() {
               </div>
               <div>
                 <label className="text-xs font-black uppercase text-slate-500 mb-1 block">
-                  Phí Làm Bài
+                  Phí Practice sau mỗi lesson (NL)
                 </label>
                 <input
                   type="number"

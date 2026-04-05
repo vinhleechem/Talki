@@ -19,8 +19,15 @@ const BOSS_COLORS = [
   "#EA580C",
 ];
 
-function getBossVisual(personalityName: string, stageId: number) {
-  const color = BOSS_COLORS[stageId % BOSS_COLORS.length];
+function getBossVisual(personalityName: string, stageId: string | number) {
+  const colorSeed =
+    typeof stageId === "number"
+      ? stageId
+      : Array.from(String(stageId)).reduce(
+          (sum, ch) => sum + ch.charCodeAt(0),
+          0,
+        );
+  const color = BOSS_COLORS[colorSeed % BOSS_COLORS.length];
   const firstWord = personalityName.split(" ")[0] ?? "B";
   const displayName = personalityName.includes("-")
     ? personalityName.split("-")[1].trim()
@@ -39,7 +46,7 @@ const BossChallengeWrapper = () => {
   const navigate = useNavigate();
 
   const state = location.state as {
-    stageId: number;
+    stageId: string | number;
     stageTitle?: string;
     lessonTitle?: string;
   } | null;
