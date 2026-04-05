@@ -59,7 +59,10 @@ const BossChallengeWrapper = () => {
     async function boot() {
       try {
         // Load payment config for cost display; do not block session if this fails
-        paymentApi.getConfig().then(setPaymentConfig).catch(() => null);
+        paymentApi
+          .getConfig()
+          .then(setPaymentConfig)
+          .catch(() => null);
 
         // Use develop boss flow: create session by chapter_id
         const sess = await bossApi.createSession({
@@ -76,11 +79,13 @@ const BossChallengeWrapper = () => {
           message?: string;
         };
         setErrorMsg(
-          e?.response?.data?.detail === "Chapter not found" || e?.response?.data?.detail?.includes("NoneType") || e?.message?.includes("NoneType")
+          e?.response?.data?.detail === "Chapter not found" ||
+            e?.response?.data?.detail?.includes("NoneType") ||
+            e?.message?.includes("NoneType")
             ? "Chapter này đang được thiết lập Boss Fight..."
             : e instanceof Error
               ? e.message
-              : "Không thể bắt đầu Boss Fight"
+              : "Không thể bắt đầu Boss Fight",
         );
         setLoadState("error");
       }

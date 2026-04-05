@@ -63,7 +63,11 @@ interface BossChallengeProps {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function playBase64Audio(b64: string, fallbackText: string, mime = "audio/wav"): Promise<void> {
+function playBase64Audio(
+  b64: string,
+  fallbackText: string,
+  mime = "audio/wav",
+): Promise<void> {
   return new Promise((resolve) => {
     if (!b64) {
       console.warn(
@@ -550,9 +554,7 @@ const BossChallenge = ({
           <div className="bg-card neo-border neo-shadow rounded-sm p-8 space-y-6">
             {/* Boss avatar */}
             <div className="flex items-center gap-4">
-              <div
-                className="w-16 h-16 rounded-full flex items-center justify-center text-3xl font-black text-white flex-shrink-0 bg-red-500 border-[3px] border-black"
-              >
+              <div className="w-16 h-16 rounded-full flex items-center justify-center text-3xl font-black text-white flex-shrink-0 bg-red-500 border-[3px] border-black">
                 <span className="text-white text-3xl">💀</span>
               </div>
               <div>
@@ -772,9 +774,13 @@ const BossChallenge = ({
   // ─── Fight screen ──────────────────────────────────────────────────────────
 
   return (
-    <div className={`min-h-screen transition-colors duration-500 bg-background`}>
+    <div
+      className={`min-h-screen transition-colors duration-500 bg-background`}
+    >
       <Navbar />
-      <div className={`container mx-auto px-4 pt-20 max-w-3xl ${bossHp < 30 ? "animate-pulse" : ""}`}>
+      <div
+        className={`container mx-auto px-4 pt-20 max-w-3xl ${bossHp < 30 ? "animate-pulse" : ""}`}
+      >
         {/* Back */}
         <div className="flex items-center gap-3 mb-4 pt-4">
           <Button
@@ -785,8 +791,12 @@ const BossChallenge = ({
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>
-            <h1 className="text-xl font-black italic">Kiểm tra kiến thức {chapterTitle}</h1>
-            <p className="text-xs font-bold text-muted-foreground uppercase">{personalityName}</p>
+            <h1 className="text-xl font-black italic">
+              Kiểm tra kiến thức {chapterTitle}
+            </h1>
+            <p className="text-xs font-bold text-muted-foreground uppercase">
+              {personalityName}
+            </p>
           </div>
           {turn > 0 && turn < maxTurns && (
             <Button
@@ -850,14 +860,14 @@ const BossChallenge = ({
 
         {/* Boss avatar */}
         <div className="bg-card neo-border neo-shadow rounded-sm p-4 mb-4 flex items-center gap-4">
-          <div
-            className="w-14 h-14 rounded-full flex items-center justify-center text-2xl font-black text-white flex-shrink-0 bg-red-500 border-[3px] border-black"
-          >
+          <div className="w-14 h-14 rounded-full flex items-center justify-center text-2xl font-black text-white flex-shrink-0 bg-red-500 border-[3px] border-black">
             <span className="text-white text-3xl">💀</span>
           </div>
           <div className="flex-1 min-w-0">
             <p className="font-black text-sm">{bossName}</p>
-            <p className="text-xs text-muted-foreground truncate">{scenarioTitle}</p>
+            <p className="text-xs text-muted-foreground truncate">
+              {scenarioTitle}
+            </p>
           </div>
           {status === "boss-speaking" && (
             <Volume2 className="w-5 h-5 text-primary animate-pulse flex-shrink-0" />
