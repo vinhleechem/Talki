@@ -9,7 +9,8 @@ services:
     volumes:
       - ./talki-backend:/app # Mount code → hot-reload hoạt động
       - type: bind
-        source: ${GOOGLE_CREDENTIALS_HOST_PATH}
+        # VPS / prod: đặt file tại ./secrets/google-credentials.json. Dev Windows: set GOOGLE_CREDENTIALS_HOST_PATH trong .env hoặc copy key vào secrets/
+        source: ${GOOGLE_CREDENTIALS_HOST_PATH:-./secrets/google-credentials.json}
         target: /keys/google-credentials.json
         read_only: true
     environment:
