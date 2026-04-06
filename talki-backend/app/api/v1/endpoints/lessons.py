@@ -7,8 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import get_current_user_id
+from app.models.boss import BossConfig
 from app.models.lesson import (
-    Boss,
     Chapter,
     Lesson,
     LessonAttemptFeedback,
@@ -26,6 +26,35 @@ from app.schemas.lesson import (
 from app.services import achievement_service, lesson_service
 
 router = APIRouter(prefix="/lessons", tags=["lessons"])
+
+
+def _pick_personality_display(raw: list | None) -> str:
+    """Extract a readable personality label from BossConfig JSON."""
+    first = (raw or [None])[0]
+    if isinstance(first, dict):
+        return str(first.get("vi_display") or first.get("eng_key") or "Boss")
+    if isinstance(first, str):
+        if "-" in first:
+            return first.split("-", 1)[-1].strip()
+        return first.strip()
+    return "Boss"
+
+
+def _pick_mission_prompt(raw: list | None) -> str:
+    """Extract a readable mission text from BossConfig scenarios JSON."""
+    first = (raw or [None])[0]
+    if isinstance(first, dict):
+        title = str(first.get("title") or "").strip()
+        context = str(first.get("context") or "").strip()
+        if title and context:
+            return f"{title}: {context}"
+        if context:
+            return context
+        if title:
+            return title
+    if isinstance(first, str):
+        return first.strip()
+    return "Hoàn thành thử thách giao tiếp của chapter để vượt qua Boss Fight."
 
 
 @router.get("/chapters", response_model=list[ChapterOut])
@@ -77,23 +106,25 @@ async def list_chapters(
             for l in lessons
         ]
 
-        # Boss – one per chapter
-        boss_result = await db.execute(
-            select(Boss).where(Boss.chapter_id == chapter.id, Boss.is_published == True)
+        # Boss config – one per chapter (new production flow)
+        cfg_result = await db.execute(
+            select(BossConfig).where(BossConfig.chapter_id == chapter.id)
         )
-        boss = boss_result.scalar_one_or_none()
+        cfg = cfg_result.scalar_one_or_none()
         boss_out = None
-        if boss:
+        if cfg:
             is_unlocked = progress_pct >= chapter.boss_unlock_threshold
+            personality_label = _pick_personality_display(cfg.personalities)
+            mission_prompt = _pick_mission_prompt(cfg.scenarios)
             boss_out = BossOut(
-                id=boss.id,
-                name=boss.name,
-                avatar_url=boss.avatar_url,
-                mission_prompt=boss.mission_prompt,
-                max_turns=boss.max_turns,
-                pass_score=boss.pass_score,
+                id=cfg.id,
+                name=f"Boss - {personality_label}",
+                avatar_url=cfg.avatar_url,
+                mission_prompt=mission_prompt,
+                max_turns=7,
+                pass_score=60,
                 is_unlocked=is_unlocked,
-                is_published=boss.is_published,
+                is_published=True,
             )
 
         out.append(
