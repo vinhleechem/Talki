@@ -15,6 +15,9 @@ class Settings(BaseSettings):
 
     # Database (Supabase Postgres)
     DATABASE_URL: str  # postgresql+asyncpg://user:pass@host/db
+    DB_POOL_SIZE: int = 2
+    DB_MAX_OVERFLOW: int = 0
+    DB_POOL_TIMEOUT: int = 30
 
     # Supabase (for auth & storage)
     SUPABASE_URL: str
