@@ -182,56 +182,71 @@ const pageTitles: Record<string, { title: string; sub: string }> = {
 function DashboardPage() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [conversations, setConversations] = useState<AdminConversation[]>([]);
+  const [lessonLogs, setLessonLogs] = useState<AdminEnergyLog[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([adminApi.getStats(), adminApi.listConversations(0, 5)])
-      .then(([s, c]) => {
+    Promise.all([
+      adminApi.getStats(),
+      adminApi.listConversations(0, 5),
+      adminApi.listEnergyLogs(0, 300),
+    ])
+      .then(([s, c, logs]) => {
         setStats(s);
         setConversations(c);
+        // giữ log lesson để vẽ chart + render bảng
+        setLessonLogs(logs.filter((x) => x.source_type === "lesson"));
       })
       .finally(() => setLoading(false));
   }, []);
 
-  const chartBars = [
-    { label: "T2", h: 55, value: "1.2k" },
-    { label: "T3", h: 75, value: "2.1k" },
-    { label: "T4", h: 65, value: "1.8k" },
-    { label: "T5", h: 90, value: "3.2k", active: true },
-    { label: "T6", h: 70, value: "2.0k" },
-    { label: "T7", h: 82, value: "2.8k" },
-    { label: "CN", h: 50, value: "1.5k" },
-  ];
+  const chartBars = useMemo(() => {
+    // 7 ngày gần nhất từ energy_logs (lesson), tính theo số lượt tiêu hao năng lượng
+    const weekdayLabels = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+    const now = new Date();
+    const days: Date[] = [];
+    for (let i = 6; i >= 0; i -= 1) {
+      const d = new Date(now);
+      d.setHours(0, 0, 0, 0);
+      d.setDate(now.getDate() - i);
+      days.push(d);
+    }
+    const countsByDay = new Map<string, number>();
+    for (const log of lessonLogs) {
+      if (log.delta >= 0) continue;
+      const d = new Date(log.created_at);
+      d.setHours(0, 0, 0, 0);
+      const key = d.toISOString().slice(0, 10);
+      countsByDay.set(key, (countsByDay.get(key) ?? 0) + 1);
+    }
+    const raw = days.map((d) => {
+      const key = d.toISOString().slice(0, 10);
+      return {
+        date: d,
+        label: weekdayLabels[d.getDay()],
+        count: countsByDay.get(key) ?? 0,
+      };
+    });
+    const maxCount = Math.max(1, ...raw.map((x) => x.count));
+    const todayKey = new Date().toISOString().slice(0, 10);
+    return raw.map((x) => ({
+      label: x.label,
+      h: Math.max(12, Math.round((x.count / maxCount) * 90)),
+      value: `${x.count} lượt`,
+      active: x.date.toISOString().slice(0, 10) === todayKey,
+    }));
+  }, [lessonLogs]);
 
-  const mockLessonLogs = [
-    {
-      id: 1,
-      user: "Minh Anh",
-      avatar: "M",
-      lesson: "Chào hỏi căn bản #1",
-      time: "Hôm nay, 14:20",
-      nrg: "-15 NRG",
-      status: "HOÀN THÀNH",
-    },
-    {
-      id: 2,
-      user: "Hoàng Nam",
-      avatar: "H",
-      lesson: "Từ vựng Du lịch",
-      time: "Hôm nay, 13:55",
-      nrg: "-20 NRG",
-      status: "HOÀN THÀNH",
-    },
-    {
-      id: 3,
-      user: "Thu Thủy",
-      avatar: "T",
-      lesson: "Giao tiếp Cơ bản",
-      time: "Hôm nay, 10:10",
-      nrg: "-25 NRG",
-      status: "ĐANG HỌC",
-    },
-  ];
+  const formatLogTime = (iso: string) => {
+    const d = new Date(iso);
+    const now = new Date();
+    const sameDay = d.toDateString() === now.toDateString();
+    const hhmm = d.toLocaleTimeString("vi-VN", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    return sameDay ? `Hôm nay, ${hhmm}` : d.toLocaleString("vi-VN");
+  };
 
   if (loading) return <Spinner />;
 
@@ -437,13 +452,18 @@ function DashboardPage() {
               </tr>
             </thead>
             <tbody>
-              {mockLessonLogs.map((log, i) => (
+              {lessonLogs.slice(0, 5).map((log, i) => {
+                const initials = (log.user_name || "U").trim().charAt(0).toUpperCase();
+                const nrg = `${log.delta > 0 ? "+" : ""}${log.delta} NRG`;
+                const status = log.delta < 0 ? "HOÀN THÀNH" : "ĐANG HỌC";
+                const lessonName = log.source_name || "Lesson không xác định";
+                return (
                 <tr
                   key={log.id}
                   className="hover:bg-orange-50 transition-colors bg-white"
                   style={{
                     borderBottom:
-                      i === mockLessonLogs.length - 1
+                      i === Math.min(lessonLogs.length, 5) - 1
                         ? "none"
                         : "2px solid black",
                   }}
@@ -454,33 +474,33 @@ function DashboardPage() {
                         className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center font-black text-xs flex-shrink-0"
                         style={{ border: "2px solid black" }}
                       >
-                        {log.avatar}
+                        {initials}
                       </div>
                       <span className="font-bold text-sm truncate">
-                        {log.user}
+                        {log.user_name}
                       </span>
                     </div>
                   </td>
                   <td className="px-6 py-4 text-[13px] font-bold truncate">
-                    {log.lesson}
+                    {lessonName}
                   </td>
                   <td className="px-6 py-4 text-[13px] text-slate-500 italic whitespace-nowrap">
-                    {log.time}
+                    {formatLogTime(log.created_at)}
                   </td>
                   <td className="px-6 py-4 text-[13px] font-black text-center whitespace-nowrap">
-                    {log.nrg}
+                    {nrg}
                   </td>
                   <td className="px-6 py-4 text-center">
-                    {log.status === "HOÀN THÀNH" ? (
+                    {status === "HOÀN THÀNH" ? (
                       <span className="inline-block text-[10px] font-black px-2 py-1 bg-black text-white italic whitespace-nowrap">
-                        {log.status}
+                        {status}
                       </span>
                     ) : (
                       <span
                         className="inline-block text-[10px] font-black px-2 py-1 text-white italic whitespace-nowrap"
                         style={{ backgroundColor: "#FF6B35" }}
                       >
-                        {log.status}
+                        {status}
                       </span>
                     )}
                   </td>
@@ -490,7 +510,17 @@ function DashboardPage() {
                     </button>
                   </td>
                 </tr>
-              ))}
+              )})}
+              {lessonLogs.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="px-6 py-8 text-center text-sm font-bold text-slate-500"
+                  >
+                    Chưa có nhật ký lesson thực tế.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
