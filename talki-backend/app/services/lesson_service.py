@@ -64,7 +64,7 @@ async def evaluate_practice(
                 ))
         except Exception:
             pass
-        raise RuntimeError(f"AI không phân tích được audio. Vui lòng thử lại. ({ai_err})") from ai_err
+        raise RuntimeError("AI không phân tích được audio. Vui lòng thử lại.") from ai_err
 
     user_text = analysis.get("transcript", "")
     # Không raise khi transcript rỗng – AI vẫn trả điểm (audio quá ngắn/yên lặng)

@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.error_messages import to_public_error_message
 from app.core.security import get_current_user_id
 from app.models.boss import BossConfig, BossSession
 from app.models.user import EnergyLog, User
@@ -382,8 +383,9 @@ async def boss_websocket(
                         break
 
                 except Exception as e:
+                    safe_message = to_public_error_message(str(e), status.HTTP_503_SERVICE_UNAVAILABLE)
                     await websocket.send_text(
-                        json.dumps({"type": "error", "message": str(e)})
+                        json.dumps({"type": "error", "message": safe_message})
                     )
 
             elif "text" in message and message["text"]:

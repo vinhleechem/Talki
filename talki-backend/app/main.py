@@ -1,11 +1,12 @@
 import logging
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.openapi.utils import get_openapi
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.v1.router import router
 from app.core.config import settings
+from app.core.error_messages import to_public_error_message
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,23 @@ app.add_middleware(
 )
 
 app.include_router(router)
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    """Sanitize HTTPException detail before returning to client."""
+    origin = request.headers.get("origin", "")
+    headers = {}
+    if origin in _CORS_ORIGINS:
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+
+    safe_detail = to_public_error_message(exc.detail, exc.status_code)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": safe_detail},
+        headers=headers,
+    )
 
 
 @app.exception_handler(Exception)

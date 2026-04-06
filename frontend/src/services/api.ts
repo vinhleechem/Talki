@@ -10,6 +10,40 @@ function normalizeApiBase(raw: string): string {
 
 const API_BASE = normalizeApiBase(import.meta.env.VITE_API_URL || "");
 
+function toUserErrorMessage(raw: unknown, fallback: string): string {
+  const detail =
+    typeof raw === "string"
+      ? raw
+      : typeof raw === "object" && raw
+        ? String(
+            (raw as { detail?: unknown; message?: unknown }).detail ??
+              (raw as { detail?: unknown; message?: unknown }).message ??
+              "",
+          )
+        : "";
+
+  const text = detail.trim();
+  if (!text) return fallback;
+
+  const lowered = text.toLowerCase();
+  const looksSensitive =
+    lowered.includes("permission_denied") ||
+    lowered.includes("api key") ||
+    lowered.includes("leaked") ||
+    lowered.includes("{'error'") ||
+    lowered.includes('{"error"');
+
+  if (looksSensitive) return fallback;
+
+  const payloadMarker = text.indexOf(" ({");
+  if (payloadMarker > 0) {
+    return text.slice(0, payloadMarker).trim();
+  }
+
+  if (text.length > 220) return fallback;
+  return text;
+}
+
 async function getAuthHeader(): Promise<Record<string, string>> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
@@ -45,14 +79,8 @@ async function apiFetch<T>(
 
   if (!res.ok) {
     const err = await parseResponseBody();
-    if (typeof err === "object" && err && "detail" in err) {
-      throw new Error(
-        String((err as { detail?: unknown }).detail ?? "API error"),
-      );
-    }
-    throw new Error(
-      typeof err === "string" ? err : res.statusText || "API error",
-    );
+    const fallback = res.statusText || "Không thể xử lý yêu cầu";
+    throw new Error(toUserErrorMessage(err, fallback));
   }
 
   const body = await parseResponseBody();
