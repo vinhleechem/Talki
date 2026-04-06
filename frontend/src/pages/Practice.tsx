@@ -304,21 +304,33 @@ const Practice = () => {
           </div>
 
           <div className="neo-border neo-shadow rounded-sm overflow-hidden">
-            {/* Video mock */}
-            <div className="relative aspect-video bg-zinc-900 flex items-center justify-center">
-              <button className="w-16 h-16 rounded-full bg-primary flex items-center justify-center neo-border hover:scale-105 transition-transform">
-                <Play className="w-7 h-7 text-primary-foreground fill-primary-foreground ml-1" />
-              </button>
-              {/* Subtitle overlay */}
-              <div className="absolute bottom-0 left-0 right-0 bg-black/70 p-4 text-center">
-                <p className="text-white font-bold italic text-base">
-                  "{DEMO_SUBTITLE}"
-                </p>
-                <p className="text-zinc-400 text-xs mt-1 uppercase tracking-wide">
-                  {DEMO_SUBTITLE_EN}
-                </p>
+            {lesson.video_url ? (
+              <div className="relative aspect-video bg-zinc-900">
+                <video
+                  className="w-full h-full object-cover"
+                  controls
+                  preload="metadata"
+                  src={lesson.video_url}
+                >
+                  Trình duyệt của bạn không hỗ trợ video.
+                </video>
               </div>
-            </div>
+            ) : (
+              <div className="relative aspect-video bg-zinc-900 flex items-center justify-center">
+                <button className="w-16 h-16 rounded-full bg-primary flex items-center justify-center neo-border hover:scale-105 transition-transform">
+                  <Play className="w-7 h-7 text-primary-foreground fill-primary-foreground ml-1" />
+                </button>
+                {/* Subtitle overlay demo khi bài chưa có video_url */}
+                <div className="absolute bottom-0 left-0 right-0 bg-black/70 p-4 text-center">
+                  <p className="text-white font-bold italic text-base">
+                    "{DEMO_SUBTITLE}"
+                  </p>
+                  <p className="text-zinc-400 text-xs mt-1 uppercase tracking-wide">
+                    {DEMO_SUBTITLE_EN}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </section>
 
