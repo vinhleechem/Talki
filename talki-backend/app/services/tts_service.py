@@ -26,6 +26,18 @@ VOICE_FEMALE = "Aoede"   # Nữ, giọng ấm, cảm xúc tốt
 VOICE_MALE   = "Charon"  # Nam, giọng trầm, tự nhiên
 
 
+def _build_southern_tts_prompt(text: str) -> str:
+    """Build a stable prompt so TTS keeps Southern Vietnamese style consistently."""
+    clean_text = str(text or "").strip()
+    return (
+        "Bạn là voice actor tiếng việt."
+        "Hãy đọc đúng nguyên văn phần THOẠI bên dưới với ngữ điệu miền Nam (việt nam) phổ thông, tự nhiên, rõ ràng."
+        "Không thêm bớt nội dung, không đổi nghĩa, không chèn lời dẫn.\n\n"
+        "THOẠI:\n"
+        f"{clean_text}"
+    )
+
+
 def _pick_voice(personality: str) -> str:
     p = (personality or "").lower()
     voice = VOICE_FEMALE if ("female" in p or "nữ" in p) else VOICE_MALE
@@ -64,9 +76,10 @@ def _pcm_to_wav(pcm_bytes: bytes, sample_rate: int = 24000) -> bytes:
 def _synthesize_sync(text: str, voice_name: str, model_name: str) -> bytes:
     """Synchronous Gemini TTS call (runs in thread pool)."""
     client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    prompt = _build_southern_tts_prompt(text)
     response = client.models.generate_content(
         model=model_name,
-        contents=text.strip()[:500],
+        contents=prompt[:900],
         config=types.GenerateContentConfig(
             response_modalities=["AUDIO"],
             speech_config=types.SpeechConfig(
