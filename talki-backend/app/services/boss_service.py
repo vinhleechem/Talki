@@ -363,7 +363,12 @@ async def process_audio_turn(
     try:
         # Extract personality string for voice selection
         personality_str = session.personality.get("vi_display", "neutral") if isinstance(session.personality, dict) else str(session.personality)
-        audio_b64 = await tts_service.synthesize_base64(reply_text, personality_str)
+        session_voice = tts_service.resolve_session_voice(str(session.id), personality_str)
+        audio_b64 = await tts_service.synthesize_base64(
+            reply_text,
+            personality_str,
+            forced_voice=session_voice,
+        )
     except Exception as e:
         print(f"[Boss TTS] Turn synthesis failed: {e}")
 
@@ -420,7 +425,12 @@ async def boss_evaluate(
     try:
         # Extract personality string for voice selection
         personality_str = session.personality.get("vi_display", "neutral") if isinstance(session.personality, dict) else str(session.personality)
-        audio_b64 = await tts_service.synthesize_base64(closing[:200], personality_str)
+        session_voice = tts_service.resolve_session_voice(str(session.id), personality_str)
+        audio_b64 = await tts_service.synthesize_base64(
+            closing[:200],
+            personality_str,
+            forced_voice=session_voice,
+        )
     except Exception as e:
         print(f"[Boss TTS] Final synthesis failed: {e}")
 
