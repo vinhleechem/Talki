@@ -27,8 +27,8 @@ class Settings(BaseSettings):
 
     # Google Gemini AI
     GEMINI_API_KEY: str
-    GEMINI_MODEL: str = "gemini-2.0-flash"
-    GEMINI_TTS_MODEL: str = "gemini-2.5-pro-preview-tts"
+    GEMINI_MODEL: str = "gemini-2.5-flash"
+    GEMINI_TTS_FAST_MODEL: str = "gemini-2.5-flash-preview-tts"
     GOOGLE_CLOUD_CREDENTIALS_JSON: str = ""
 
 

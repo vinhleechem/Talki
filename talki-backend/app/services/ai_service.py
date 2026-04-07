@@ -1,5 +1,6 @@
 """Google Gemini – AI Mentor chat and feedback generation."""
 import json
+import logging
 import re as _re
 
 from google import genai
@@ -8,11 +9,48 @@ from google.genai import types
 from app.core.config import settings
 from app.utils.text_analysis import is_too_short
 
+logger = logging.getLogger(__name__)
+
 GUARDRAIL_KEYWORDS = ["địt", "đéo", "vcl", "vl", "dmm", "fuck", "shit"]
 
 FOLLOW_UP_SUFFIX = (
     "\n(Người dùng trả lời quá ngắn. Hãy hỏi vặn lại để họ giải thích rõ hơn.)"
 )
+
+FILLER_WORDS = ["ừm", "um", "uh", "à", "ờ", "ờm", "kiểu", "kiểu như"]
+
+
+def _estimate_turn_scores(transcript: str) -> tuple[int, int, int]:
+    """Estimate filler/fluency/content from transcript for fallback scoring."""
+    text = str(transcript or "").strip().lower()
+    if not text:
+        return 0, 45, 45
+
+    filler_count = 0
+    for token in FILLER_WORDS:
+        filler_count += len(_re.findall(rf"\b{_re.escape(token)}\b", text))
+
+    word_count = len([w for w in text.split() if w])
+
+    fluency_score = 78 - (filler_count * 8)
+    if word_count <= 2:
+        fluency_score -= 12
+    elif word_count <= 4:
+        fluency_score -= 6
+
+    rude_markers = ["đéo", "địt", "kệ", "biến", "không biết", "đi chỗ khác"]
+    if any(marker in text for marker in rude_markers):
+        content_score = 28
+    elif word_count <= 2:
+        content_score = 52
+    elif word_count <= 4:
+        content_score = 60
+    else:
+        content_score = 74
+
+    fluency_score = max(25, min(95, fluency_score))
+    content_score = max(20, min(95, content_score))
+    return filler_count, fluency_score, content_score
 
 
 def _get_client() -> genai.Client:
@@ -341,6 +379,56 @@ async def boss_chat_turn(
         "filler_count": int(result.get("filler_count", 0)),
         "fluency_score": float(result.get("fluency_score", 50)),
         "content_score": float(result.get("content_score", 50)),
+    }
+
+
+async def boss_chat_turn_from_transcript(
+    system_prompt: str,
+    history: list[dict],
+    transcript: str,
+) -> dict:
+    """Fallback path: generate boss reply from transcript (no strict JSON dependency)."""
+    client = _get_client()
+
+    contents = []
+    for msg in history:
+        role = "user" if msg.get("role") == "user" else "model"
+        contents.append(
+            types.Content(role=role, parts=[types.Part(text=msg.get("content", ""))])
+        )
+
+    prompt = (
+        f"[SYSTEM_CONTEXT]\n{system_prompt}\n[/SYSTEM_CONTEXT]\n\n"
+        f"NGƯỜI DÙNG VỪA NÓI: {transcript}\n\n"
+        "Hãy trả lời đúng vai, 1-3 câu, tiếng Việt tự nhiên, bám sát ý người dùng vừa nói. "
+        "Không markdown, không code block, không giải thích thêm."
+    )
+    contents.append(types.Content(role="user", parts=[types.Part(text=prompt)]))
+
+    try:
+        response = await client.aio.models.generate_content(
+            model=settings.GEMINI_MODEL,
+            contents=contents,
+        )
+        reply = str(response.text or "").strip()
+    except Exception as exc:
+        logger.warning("[BossAI] transcript fallback generation failed: %s", exc)
+        reply = ""
+
+    if not reply:
+        reply = "Mình nghe rồi. Bạn nói rõ thêm một chút để mình phản hồi chuẩn hơn nhé."
+
+    reply = reply.replace("```", "").replace("json", "").strip()
+    if "\n" in reply:
+        reply = " ".join([line.strip() for line in reply.splitlines() if line.strip()])
+
+    filler_count, fluency_score, content_score = _estimate_turn_scores(transcript)
+    return {
+        "transcript": str(transcript or "").strip() or "[Không nghe rõ]",
+        "reply": reply,
+        "filler_count": int(filler_count),
+        "fluency_score": float(fluency_score),
+        "content_score": float(content_score),
     }
 
 

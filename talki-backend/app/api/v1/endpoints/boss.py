@@ -19,6 +19,16 @@ from app.services import boss_service, heart_service, payment_service
 router = APIRouter(prefix="/boss", tags=["boss"])
 
 
+def _as_uuid(value: str | uuid.UUID, field_name: str = "id") -> uuid.UUID:
+    """Normalize string/UUID inputs to UUID and raise consistent 400 on bad values."""
+    if isinstance(value, uuid.UUID):
+        return value
+    try:
+        return uuid.UUID(str(value))
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail=f"Invalid {field_name}")
+
+
 # ─── Pydantic schemas ─────────────────────────────────────────────────────────
 
 class ScenarioOut(BaseModel):
@@ -173,9 +183,11 @@ async def create_boss_session(
 ):
     """Create a new boss fight session. Energy is charged only on explicit start."""
 
+    current_user_uuid = _as_uuid(current_user_id, "user ID")
+
     session, greeting_text, scenario_title = await boss_service.create_session(
         db=db,
-        user_id=current_user_id,
+        user_id=current_user_uuid,
         chapter_id=body.chapter_id,
         max_turns=body.max_turns,
         pass_score=body.pass_score,
@@ -186,7 +198,12 @@ async def create_boss_session(
     try:
         from app.services import tts_service
         personality_str = str(session.personality)
-        greeting_audio_b64 = await tts_service.synthesize_base64(greeting_text, personality_str)
+        session_voice = tts_service.resolve_session_voice(str(session.id), personality_str)
+        greeting_audio_b64 = await tts_service.synthesize_base64(
+            greeting_text,
+            personality_str,
+            forced_voice=session_voice,
+        )
     except Exception as e:
         print(f"[Boss TTS] Greeting synthesis failed: {e}")
 
@@ -212,15 +229,13 @@ async def start_boss_session(
     db: AsyncSession = Depends(get_db),
 ):
     """Charge boss fight energy when user explicitly clicks start."""
-    try:
-        session_uuid = uuid.UUID(session_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid session ID")
+    session_uuid = _as_uuid(session_id, "session ID")
+    current_user_uuid = _as_uuid(current_user_id, "user ID")
 
     session = await db.get(BossSession, session_uuid)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    if session.user_id != current_user_id:
+    if str(session.user_id) != str(current_user_uuid):
         raise HTTPException(status_code=403, detail="Forbidden")
 
     config = await payment_service.get_or_create_manual_config(db)
@@ -228,7 +243,7 @@ async def start_boss_session(
 
     existing_charge_result = await db.execute(
         select(EnergyLog.id).where(
-            EnergyLog.user_id == current_user_id,
+            EnergyLog.user_id == current_user_uuid,
             EnergyLog.reason == "boss_fight",
             EnergyLog.reference_id == session.id,
         ).limit(1)
@@ -240,7 +255,7 @@ async def start_boss_session(
         try:
             await heart_service.consume_energy(
                 db,
-                current_user_id,
+                current_user_uuid,
                 amount=boss_cost,
                 reason="boss_fight",
                 reference_id=session.id,
@@ -252,7 +267,7 @@ async def start_boss_session(
                 detail=str(e),
             )
 
-    user = await db.get(User, current_user_id)
+    user = await db.get(User, current_user_uuid)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -270,9 +285,11 @@ async def get_my_sessions(
     db: AsyncSession = Depends(get_db),
 ):
     """Get the current user's boss fight history."""
+    current_user_uuid = _as_uuid(current_user_id, "user ID")
+
     result = await db.execute(
         select(BossSession)
-        .where(BossSession.user_id == current_user_id)
+        .where(BossSession.user_id == current_user_uuid)
         .order_by(BossSession.started_at.desc())
         .limit(20)
     )
@@ -329,6 +346,7 @@ async def boss_websocket(
     try:
         from app.core.security import verify_token_get_user_id
         user_id = await verify_token_get_user_id(token)
+        user_uuid = _as_uuid(user_id, "user ID")
     except Exception:
         await websocket.send_text(json.dumps({"type": "error", "message": "Invalid or expired token"}))
         await websocket.close(code=4001)
@@ -348,6 +366,11 @@ async def boss_websocket(
         await websocket.close()
         return
 
+    if str(session.user_id) != str(user_uuid):
+        await websocket.send_text(json.dumps({"type": "error", "message": "Forbidden"}))
+        await websocket.close(code=4003)
+        return
+
     if session.is_complete:
         await websocket.send_text(json.dumps({"type": "error", "message": "Session already complete"}))
         await websocket.close()
@@ -356,7 +379,13 @@ async def boss_websocket(
     try:
         while True:
             # Receive message (binary audio or text control)
-            message = await websocket.receive()
+            try:
+                message = await websocket.receive()
+            except RuntimeError:
+                break
+
+            if message.get("type") == "websocket.disconnect":
+                break
 
             if "bytes" in message and message["bytes"]:
                 audio_bytes = message["bytes"]

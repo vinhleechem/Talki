@@ -82,14 +82,13 @@ GIAI ĐOẠN HIỆN TẠI (lượt {turn_count + 1}/{max_turns}):
 {phase_hint}
 
 NGUYÊN TẮC BẮT BUỘC:
-- BẠN PHẢI CHỦ ĐỘNG DẪN DẮT CÂU CHUYỆN: Đừng chỉ trả lời thụ động hay chào hỏi qua lại. Hãy liên tục đặt câu hỏi, nêu vấn đề, đòi hỏi hoặc tạo sức ép phù hợp với TÌNH HUỐNG và TÍNH CÁCH của bạn.
-- BÁM SÁT MỤC TIÊU: Nhớ kỹ lý do bạn bắt chuyện ban đầu. Nếu người dùng lảng tránh, ngây ngô hoặc hỏi ngược lại "có chuyện gì", hãy nhắc thẳng vào vấn đề một cách dứt khoát.
-- Luôn ở trong vai, coi mình là người trong cuộc và hành động như thật.
-- Chỉ trả lời bằng tiếng Việt, tự nhiên và thoải mái.
+- Luôn ở trong vai, coi mình là người trong cuộc và hành động như thật đúng với tính cách và bối cảnh.
+- Chỉ trả lời bằng tiếng Việt, tông giọng và ngữ điệu miền nam, phổ thông, tự nhiên và thoải mái.
 - Câu trả lời NGẮN (1-3 câu). Tuyệt đối không giải thích ngữ cảnh, không nhắc tới chữ "tình huống", "luyện tập", hay "kiểm tra".
-- Phản ứng chân thực theo tính cách: nếu đang cáu gắt thì phải khó chịu, nếu lươn lẹo thì phải ngọt nhạt.
-- Nếu người dùng nói không liên quan, hãy kéo họ về chủ đề chính.
+- Phản ứng chân thực theo tính cách nhưng KHÔNG xúc phạm người dùng.
+- Nương theo mạch hội thoại của người dùng, phản hồi có tính xây dựng và gợi mở tự nhiên khi phù hợp.
 - Không bao giờ ra vẻ giáo viên hay nhận xét lỗi ngữ pháp. Chỉ nói chuyện đời thường.
+- Đánh giá cuối trận: AI dựa trên bối cảnh để chấm điểm: Boss bận rộn sẽ chấm điểm cao nếu nói ngắn, Boss hợm hĩnh sẽ chấm điểm cao nếu user thể hiện được sự tự tin không nao núng.
 
 JSON OUTPUT:
 Bạn PHẢI trả về kết quả theo định dạng JSON sau (chỉ JSON, không kèm giải thích):
@@ -252,11 +251,12 @@ async def process_audio_turn(
     """
     Process one audio turn:
     1. Gemini boss_chat_turn (Audio-In) → transcript + reply + scores
+       If not-heard, fallback to STT + transcript-driven reply.
     2. Update HP, conversation history
     3. TTS → audio_bytes
     4. Return full result dict
     """
-    from app.services.ai_service import boss_chat_turn
+    from app.services.ai_service import boss_chat_turn, boss_chat_turn_from_transcript
 
     system_prompt = build_boss_system_prompt(
         session.scenario,
@@ -288,12 +288,44 @@ async def process_audio_turn(
     fluency_score = float(turn_result.get("fluency_score", 50))
     content_score = float(turn_result.get("content_score", 50))
 
-    # 3. Calculate damage/HP (max 30 damage per turn)
-    damage_to_boss = min(30, max(5, int((fluency_score + content_score) / 8)))
-    
-    # User takes damage if they speak poorly, hesitate, or use filler words
-    damage_from_errors = max(0, 20 - int((fluency_score + content_score) / 10))
-    damage_to_user = min(40, damage_from_errors + (filler_count * 5))
+    not_heard = str(transcript).strip().lower() in {
+        "[không nghe rõ]",
+        "[khong nghe ro]",
+        "không nghe rõ",
+        "khong nghe ro",
+    }
+
+    if not_heard:
+        try:
+            stt_text = (await transcribe_audio(audio_bytes)).strip()
+            if stt_text:
+                fallback = await boss_chat_turn_from_transcript(
+                    system_prompt=system_prompt,
+                    history=history,
+                    transcript=stt_text,
+                )
+                transcript = fallback.get("transcript", stt_text)
+                reply_text = fallback.get("reply", reply_text)
+                filler_count = int(fallback.get("filler_count", filler_count))
+                fluency_score = float(fallback.get("fluency_score", fluency_score))
+                content_score = float(fallback.get("content_score", content_score))
+                not_heard = False
+        except Exception:
+            # Keep graceful not-heard path below if STT is unavailable.
+            pass
+
+    if not_heard:
+        # Do not penalize either side when audio could not be understood.
+        damage_to_boss = 0
+        damage_to_user = 0
+        filler_count = 0
+    else:
+        # 3. Calculate damage/HP (max 30 damage per turn)
+        damage_to_boss = min(30, max(5, int((fluency_score + content_score) / 8)))
+
+        # User takes damage if they speak poorly, hesitate, or use filler words
+        damage_from_errors = max(0, 20 - int((fluency_score + content_score) / 10))
+        damage_to_user = min(40, damage_from_errors + (filler_count * 5))
 
     new_boss_hp = max(0, session.boss_hp - damage_to_boss)
     new_user_hp = max(0, session.user_hp - damage_to_user)
@@ -329,7 +361,12 @@ async def process_audio_turn(
     try:
         # Extract personality string for voice selection
         personality_str = session.personality.get("vi_display", "neutral") if isinstance(session.personality, dict) else str(session.personality)
-        audio_b64 = await tts_service.synthesize_base64(reply_text, personality_str)
+        session_voice = tts_service.resolve_session_voice(str(session.id), personality_str)
+        audio_b64 = await tts_service.synthesize_base64(
+            reply_text,
+            personality_str,
+            forced_voice=session_voice,
+        )
     except Exception as e:
         print(f"[Boss TTS] Turn synthesis failed: {e}")
 
@@ -386,7 +423,12 @@ async def boss_evaluate(
     try:
         # Extract personality string for voice selection
         personality_str = session.personality.get("vi_display", "neutral") if isinstance(session.personality, dict) else str(session.personality)
-        audio_b64 = await tts_service.synthesize_base64(closing[:200], personality_str)
+        session_voice = tts_service.resolve_session_voice(str(session.id), personality_str)
+        audio_b64 = await tts_service.synthesize_base64(
+            closing[:200],
+            personality_str,
+            forced_voice=session_voice,
+        )
     except Exception as e:
         print(f"[Boss TTS] Final synthesis failed: {e}")
 
