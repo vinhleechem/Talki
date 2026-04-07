@@ -1,7 +1,6 @@
 """Gemini TTS — Expressive Vietnamese speech synthesis using Google AI Studio.
 
-Defaults to gemini-2.5-pro-preview-tts for best quality.
-Falls back to gemini-2.5-flash-preview-tts if primary model is unavailable.
+Uses only gemini-2.5-flash-preview-tts (configured via GEMINI_TTS_FAST_MODEL).
 No extra API key needed — reuses GEMINI_API_KEY.
 """
 import asyncio
@@ -17,9 +16,8 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Gemini TTS models
-DEFAULT_TTS_MODEL = "gemini-2.5-pro-preview-tts"
-FALLBACK_TTS_MODEL = "gemini-2.5-flash-preview-tts"
+# Gemini TTS model (single-model mode)
+DEFAULT_TTS_FAST_MODEL = "gemini-2.5-flash-preview-tts"
 
 # Voice map — all voices support Vietnamese text naturally with emotion
 # Full list: https://cloud.google.com/text-to-speech/docs/voices
@@ -79,36 +77,21 @@ async def synthesize(text: str, personality: str = "") -> bytes:
         return b""
 
     voice_name = _pick_voice(personality)
-
-    primary_model = (settings.GEMINI_TTS_MODEL or DEFAULT_TTS_MODEL).strip()
-    candidates: list[str] = [primary_model]
-    if primary_model != FALLBACK_TTS_MODEL:
-        candidates.append(FALLBACK_TTS_MODEL)
+    model_name = (settings.GEMINI_TTS_FAST_MODEL or DEFAULT_TTS_FAST_MODEL).strip()
 
     try:
-        last_error: Exception | None = None
-        for model_name in candidates:
-            try:
-                logger.info(
-                    f"[TTS] Calling Gemini TTS model={model_name} voice={voice_name} text_len={len(text)}"
-                )
-                wav_bytes = await asyncio.to_thread(
-                    _synthesize_sync, text, voice_name, model_name
-                )
-                logger.info(
-                    f"[TTS] Gemini TTS success model={model_name}, audio bytes={len(wav_bytes)}"
-                )
-                return wav_bytes
-            except Exception as e:
-                last_error = e
-                logger.warning(
-                    f"[TTS] Gemini TTS failed model={model_name}: {e}. Trying fallback if available."
-                )
-
-        logger.error(f"[TTS] All Gemini TTS models failed. Last error: {last_error}")
-        return b""
+        logger.info(
+            f"[TTS] Calling Gemini TTS model={model_name} voice={voice_name} text_len={len(text)}"
+        )
+        wav_bytes = await asyncio.to_thread(
+            _synthesize_sync, text, voice_name, model_name
+        )
+        logger.info(
+            f"[TTS] Gemini TTS success model={model_name}, audio bytes={len(wav_bytes)}"
+        )
+        return wav_bytes
     except Exception as e:
-        logger.error(f"[TTS] Unexpected synthesize exception: {e}")
+        logger.error(f"[TTS] Gemini TTS failed model={model_name}: {e}")
         return b""
 
 
