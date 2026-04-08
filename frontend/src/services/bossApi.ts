@@ -3,6 +3,7 @@
  */
 import { apiFetch, getAuthHeader, API_BASE } from "./api";
 import type { AdminBossConfig } from "@/types";
+import { supabase } from "@/integrations/supabase/client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -97,10 +98,21 @@ export async function openBossWebSocket(
   onError?: (err: Event) => void,
   onClose?: () => void,
 ): Promise<WebSocket> {
-  const { data } = await import("@/integrations/supabase/client").then((m) =>
-    m.supabase.auth.getSession(),
-  );
+  if (!supabase || !supabase.auth) {
+    throw new Error(
+      "Supabase client chưa được khởi tạo (thiếu VITE_SUPABASE_URL hoặc VITE_SUPABASE_PUBLISHABLE_KEY)",
+    );
+  }
+
+  const { data, error } = await supabase.auth.getSession();
+  if (error) {
+    throw new Error(`Không lấy được phiên đăng nhập: ${error.message}`);
+  }
+
   const token = data.session?.access_token ?? "";
+  if (!token) {
+    throw new Error("Chưa có access token đăng nhập để kết nối Boss Fight");
+  }
 
   // Derive WS base from API_BASE (http->ws, https->wss)
   const wsBase = API_BASE.replace(/^http/, "ws");
