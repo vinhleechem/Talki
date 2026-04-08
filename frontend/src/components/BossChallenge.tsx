@@ -327,7 +327,16 @@ const BossChallenge = ({
             ...prev,
             { role: "user", content: optimText, isOptimistic: true },
           ]);
-          if (wsRef.current) sendAudioToWs(wsRef.current, blob);
+          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            sendAudioToWs(wsRef.current, blob);
+          } else {
+            toast({
+              title: "Mất kết nối với Boss",
+              description: "Kết nối chưa sẵn sàng, hãy thử bắt đầu lại trận.",
+              variant: "destructive",
+            });
+            setStatusSynced("idle");
+          }
         },
         // onSpeechStart — user started speaking
         () => {
@@ -476,56 +485,39 @@ const BossChallenge = ({
     [userHp, bossHp, turn, pauseListening, setStatusSynced, maxTurns],
   );
 
-  // ─── Initialize WebSocket in background while user reads briefing ───────────
+  // ─── Connect WS on-demand (avoid idle close during briefing) ──────────────
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function connectWs() {
-      try {
-        const ws = await openBossWebSocket(
-          sessionId,
-          (result) => {
-            if (!cancelled) handleTurnResult(result);
-          },
-          () => {
-            if (!cancelled)
-              toast({ title: "Mất kết nối với Boss", variant: "destructive" });
-          },
-          () => {
-            if (
-              !cancelled &&
-              statusRef.current !== "finished" &&
-              !finalizingRef.current
-            ) {
-              toast({
-                title: "Kết nối đóng, bạn có thể thử lại.",
-                variant: "destructive",
-              });
-            }
-          },
-        );
-        if (!cancelled) wsRef.current = ws;
-        else ws.close();
-      } catch (e) {
-        if (!cancelled)
+  const connectWs = useCallback(async () => {
+    const ws = await openBossWebSocket(
+      sessionId,
+      (result) => {
+        handleTurnResult(result);
+      },
+      () => {
+        toast({ title: "Mất kết nối với Boss", variant: "destructive" });
+      },
+      () => {
+        if (statusRef.current !== "finished" && !finalizingRef.current) {
           toast({
-            title: "Không thể kết nối Boss Fight",
-            description: String(e),
+            title: "Kết nối đóng, bạn có thể thử lại.",
             variant: "destructive",
           });
-      }
-    }
+        }
+      },
+    );
 
-    connectWs();
+    wsRef.current = ws;
+    return ws;
+  }, [sessionId, handleTurnResult, toast]);
 
+  // ─── Cleanup only ───────────────────────────────────────────────────────────
+
+  useEffect(() => {
     return () => {
-      cancelled = true;
       vadRef.current?.stop();
       wsRef.current?.close();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]);
+  }, []);
 
   // ─── User clicks "Sẵn sàng" on the briefing screen ───────────────────────
 
@@ -544,6 +536,11 @@ const BossChallenge = ({
     finalizingRef.current = false;
     try {
       setStatusSynced("connecting");
+
+      // Open WebSocket right before entering the fight flow.
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+        await connectWs();
+      }
 
       await bossApi.startSession(sessionId);
       await refresh();
@@ -580,6 +577,7 @@ const BossChallenge = ({
     greetingAudioB64,
     startListening,
     setStatusSynced,
+    connectWs,
   ]);
 
   // ─── Manual finish ─────────────────────────────────────────────────────────
