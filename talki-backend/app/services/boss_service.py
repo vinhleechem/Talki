@@ -250,8 +250,8 @@ async def process_audio_turn(
 ) -> dict:
     """
     Process one audio turn:
-    1. Gemini boss_chat_turn (Audio-In) → transcript + reply + scores
-       If not-heard, fallback to STT + transcript-driven reply.
+    1. STT transcript from audio
+    2. Generate boss reply from transcript (stable text path)
     2. Update HP, conversation history
     3. TTS → audio_bytes
     4. Return full result dict
@@ -274,19 +274,42 @@ async def process_audio_turn(
         # However, to be thorough, we should really process this last audio.
         pass
 
-    # Process turn with NATIVE AUDIO in Gemini
-    turn_result = await boss_chat_turn(
-        system_prompt=system_prompt,
-        history=history,
-        audio_bytes=audio_bytes,
-        mime_type=mime_type,
-    )
+    transcript = "[Không nghe rõ]"
+    reply_text = "Mình chưa nghe rõ bạn nói gì, bạn nói lại chậm và rõ hơn giúp mình nhé."
+    filler_count = 0
+    fluency_score = 50.0
+    content_score = 50.0
 
-    transcript = turn_result.get("transcript", "[Không nghe rõ]")
-    reply_text = turn_result.get("reply", "...")
-    filler_count = int(turn_result.get("filler_count", 0))
-    fluency_score = float(turn_result.get("fluency_score", 50))
-    content_score = float(turn_result.get("content_score", 50))
+    # Prefer STT-first path for stable behavior across different scenarios.
+    try:
+        stt_text = (await transcribe_audio(audio_bytes)).strip()
+        if stt_text:
+            turn_result = await boss_chat_turn_from_transcript(
+                system_prompt=system_prompt,
+                history=history,
+                transcript=stt_text,
+            )
+            transcript = turn_result.get("transcript", stt_text)
+            reply_text = turn_result.get("reply", reply_text)
+            filler_count = int(turn_result.get("filler_count", filler_count))
+            fluency_score = float(turn_result.get("fluency_score", fluency_score))
+            content_score = float(turn_result.get("content_score", content_score))
+        else:
+            # If STT returns empty, try native audio model once.
+            turn_result = await boss_chat_turn(
+                system_prompt=system_prompt,
+                history=history,
+                audio_bytes=audio_bytes,
+                mime_type=mime_type,
+            )
+            transcript = turn_result.get("transcript", transcript)
+            reply_text = turn_result.get("reply", reply_text)
+            filler_count = int(turn_result.get("filler_count", filler_count))
+            fluency_score = float(turn_result.get("fluency_score", fluency_score))
+            content_score = float(turn_result.get("content_score", content_score))
+    except Exception:
+        # Keep graceful defaults if both STT and model generation fail.
+        pass
 
     not_heard = str(transcript).strip().lower() in {
         "[không nghe rõ]",

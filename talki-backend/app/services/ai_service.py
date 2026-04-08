@@ -422,13 +422,23 @@ async def boss_chat_turn_from_transcript(
     if "\n" in reply:
         reply = " ".join([line.strip() for line in reply.splitlines() if line.strip()])
 
+    # Some model responses still return a full JSON object as text.
+    # If so, extract reply/scores instead of sending raw JSON string to UI.
+    parsed_payload: dict = {}
+    if "\"reply\"" in reply and "{" in reply and "}" in reply:
+        try:
+            parsed_payload = _parse_json_response(reply, "boss_chat_turn_from_transcript_text")
+            reply = str(parsed_payload.get("reply", "")).strip() or reply
+        except RuntimeError:
+            parsed_payload = {}
+
     filler_count, fluency_score, content_score = _estimate_turn_scores(transcript)
     return {
         "transcript": str(transcript or "").strip() or "[Không nghe rõ]",
         "reply": reply,
-        "filler_count": int(filler_count),
-        "fluency_score": float(fluency_score),
-        "content_score": float(content_score),
+        "filler_count": int(parsed_payload.get("filler_count", filler_count)),
+        "fluency_score": float(parsed_payload.get("fluency_score", fluency_score)),
+        "content_score": float(parsed_payload.get("content_score", content_score)),
     }
 
 
