@@ -231,7 +231,8 @@ function DashboardPage() {
     const todayKey = new Date().toISOString().slice(0, 10);
     return raw.map((x) => ({
       label: x.label,
-      h: Math.max(12, Math.round((x.count / maxCount) * 90)),
+      // dùng px thay vì % để cột luôn render đúng chiều cao trong flex layout
+      h: Math.max(10, Math.round((x.count / maxCount) * 120)),
       value: `${x.count} lượt`,
       active: x.date.toISOString().slice(0, 10) === todayKey,
     }));
@@ -332,7 +333,7 @@ function DashboardPage() {
                 <div
                   className="w-full relative transition-colors max-w-[36px]"
                   style={{
-                    height: `${b.h}%`,
+                    height: `${b.h}px`,
                     border: "2px solid black",
                     backgroundColor: b.active ? PRIMARY : "white",
                   }}
